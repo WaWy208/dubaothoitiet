@@ -1,4 +1,4 @@
-﻿/* ══════════════════════════════════════════
+/* ══════════════════════════════════════════
    CÀ MAU MỚI WEATHER — UPGRADED SCRIPT (Cà Mau + Bạc Liêu cũ)
    Tính năng: 147 xã/phường/thị trấn, so sánh vùng, biểu đồ nhiệt độ,
    đổi °C/°F, light/dark, tìm kiếm, modal chi tiết, tab navigation
@@ -1129,19 +1129,29 @@ $('districtFilter') && $('districtFilter').addEventListener('click', e => {
   btn.classList.add('active');
   wardFilterD = btn.dataset.d;
   renderWardsGrid(wardFilterD, $('wardSearch') ? $('wardSearch').value : '');
+  requestAnimationFrame(refreshVisualFX);
 });
-$('wardSearch') && $('wardSearch').addEventListener('input', e => renderWardsGrid(wardFilterD, e.target.value));
+$('wardSearch') && $('wardSearch').addEventListener('input', e => {
+  renderWardsGrid(wardFilterD, e.target.value);
+  requestAnimationFrame(refreshVisualFX);
+});
 
 // ── TAB SWITCHING ──
 function switchTab(name) {
+  const prev = document.querySelector('.tab-content.active');
+  if (prev) prev.classList.remove('tab-enter');
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-btn,.bn-item').forEach(b => b.classList.remove('active'));
   const content = $('tab-' + name);
-  if (content) content.classList.add('active');
+  if (content) {
+    content.classList.add('active');
+    requestAnimationFrame(() => content.classList.add('tab-enter'));
+  }
   document.querySelectorAll(`[data-tab="${name}"]`).forEach(b => b.classList.add('active'));
   if (name === 'forecast') renderForecastFull();
   if (name === 'wards') renderWardsGrid(wardFilterD, '');
   if (name === 'compare') renderCompare();
+  requestAnimationFrame(refreshVisualFX);
 }
 document.querySelectorAll('.tab-btn,.bn-item').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -1166,6 +1176,7 @@ function renderCompareCard(slot, w) {
       <div class="cp-stat"><div class="cp-sv">${w.wind}km/h</div><div class="cp-sl">Gió</div></div>
     </div>
   </div>`;
+  requestAnimationFrame(refreshVisualFX);
 }
 function buildCompareTable() {
   const A = STATE.compareA, B = STATE.compareB;
@@ -1269,6 +1280,7 @@ $('unitToggle').addEventListener('click', () => {
   if ($('tab-wards').classList.contains('active')) renderWardsGrid(wardFilterD, $('wardSearch').value);
   const w = STATE.selectedWard || {temp:32,hi:35,lo:27};
   updateTempDisplay(w.temp, w.hi, w.lo);
+  refreshVisualFX();
   showToast(`Đã chuyển sang ${unitSuffix()}`);
 });
 
@@ -1292,6 +1304,7 @@ $('refreshBtn').addEventListener('click', function() {
     renderForecastHome();
     renderChart();
     renderDashboard();
+    refreshVisualFX();
     showToast('✅ Đã cập nhật dữ liệu!');
   }, 1200);
 });
@@ -1304,22 +1317,154 @@ $('alertClose').addEventListener('click', () => {
   bar.style.marginBottom = '0'; bar.style.padding = '0';
 });
 
-// ── 3D CARD TILT ──
-document.querySelectorAll('.tilt').forEach(el => {
-  el.addEventListener('mousemove', e => {
-    const r = el.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width - .5;
-    const y = (e.clientY - r.top) / r.height - .5;
-    el.style.transform = `perspective(400px) rotateY(${x*12}deg) rotateX(${-y*12}deg) translateZ(4px)`;
+// ── ADVANCED 3D INTERACTIONS ──
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let revealObserver = null;
+
+function attachInteractive3D(selector, config = {}) {
+  if (REDUCED_MOTION) return;
+  const {
+    intensity = 10,
+    perspective = 700,
+    scale = 1.015,
+    translate = 6
+  } = config;
+
+  document.querySelectorAll(selector).forEach(el => {
+    el.classList.add('interactive-3d');
+    let rafId = 0;
+
+    const applyTilt = (clientX, clientY) => {
+      const r = el.getBoundingClientRect();
+      const x = (clientX - r.left) / r.width - 0.5;
+      const y = (clientY - r.top) / r.height - 0.5;
+      const rx = -y * intensity;
+      const ry = x * intensity;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        el.style.transform = `perspective(${perspective}px) rotateX(${rx}deg) rotateY(${ry}deg) translateZ(${translate}px) scale(${scale})`;
+      });
+    };
+
+    const resetTilt = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      el.style.transform = '';
+    };
+
+    el.addEventListener('mousemove', e => applyTilt(e.clientX, e.clientY));
+    el.addEventListener('mouseleave', resetTilt);
+    el.addEventListener('touchstart', () => {
+      el.style.transform = `perspective(${perspective}px) scale(1.01)`;
+    }, { passive: true });
+    el.addEventListener('touchend', resetTilt, { passive: true });
   });
-  el.addEventListener('mouseleave', () => { el.style.transform = ''; });
-});
+}
+
+function attachHeroParallax() {
+  if (REDUCED_MOTION) return;
+  const icon = $('mainIcon');
+  const hero = document.querySelector('.hero-container');
+  if (!icon || !hero) return;
+
+  let rafId = 0;
+  const move = (clientX, clientY) => {
+    const r = hero.getBoundingClientRect();
+    const x = (clientX - r.left) / r.width - 0.5;
+    const y = (clientY - r.top) / r.height - 0.5;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      icon.style.transform = `translate3d(${x * 16}px, ${y * -12}px, 24px) rotateY(${x * 14}deg) rotateX(${y * -8}deg)`;
+    });
+  };
+
+  hero.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+  hero.addEventListener('mouseleave', () => {
+    icon.style.transform = '';
+  });
+}
+
+function createNavHighlight(containerSelector) {
+  const container = document.querySelector(containerSelector);
+  if (!container) return null;
+  let hl = container.querySelector('.nav-highlight');
+  if (!hl) {
+    hl = document.createElement('div');
+    hl.className = 'nav-highlight';
+    container.prepend(hl);
+  }
+  return hl;
+}
+
+function moveNavHighlight(container, activeEl, hl) {
+  if (!container || !activeEl || !hl) return;
+  const cRect = container.getBoundingClientRect();
+  const aRect = activeEl.getBoundingClientRect();
+  hl.style.width = `${aRect.width}px`;
+  hl.style.height = `${aRect.height}px`;
+  hl.style.transform = `translate3d(${aRect.left - cRect.left}px, ${aRect.top - cRect.top}px, 0)`;
+  hl.style.opacity = '1';
+}
+
+function updateNavHighlights() {
+  const desktopNav = document.querySelector('.tab-nav');
+  const mobileNav = document.querySelector('.bottom-nav-inner');
+  const desktopHighlight = createNavHighlight('.tab-nav');
+  const mobileHighlight = createNavHighlight('.bottom-nav-inner');
+
+  if (desktopNav && desktopHighlight) {
+    const activeDesktop = desktopNav.querySelector('.tab-btn.active');
+    if (activeDesktop) moveNavHighlight(desktopNav, activeDesktop, desktopHighlight);
+  }
+  if (mobileNav && mobileHighlight) {
+    const activeMobile = mobileNav.querySelector('.bn-item.active');
+    if (activeMobile) moveNavHighlight(mobileNav, activeMobile, mobileHighlight);
+  }
+}
+
+function initReveal3D() {
+  if (REDUCED_MOTION || !('IntersectionObserver' in window)) return;
+
+  if (!revealObserver) {
+    revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) entry.target.classList.add('is-visible');
+      });
+    }, {
+      threshold: 0.15,
+      rootMargin: '0px 0px -8% 0px'
+    });
+  }
+
+  const targets = document.querySelectorAll(
+    '.stat-card, .hour-card, .forecast-card, .fc-full-card, .detail-card, .ward-card, .cp-info-card, .dash-chart-wrap, .dash-table-wrap, .chart-wrap, .sun-card'
+  );
+  targets.forEach((el, idx) => {
+    if (!el.classList.contains('reveal-3d')) {
+      el.classList.add('reveal-3d');
+      el.style.setProperty('--reveal-delay', `${(idx % 10) * 32}ms`);
+      revealObserver.observe(el);
+    }
+  });
+}
+
+function refreshVisualFX() {
+  updateNavHighlights();
+  initReveal3D();
+}
 
 // ── INIT RENDER ──
 renderHourly();
 renderForecastHome();
 renderDashboard();
 setTimeout(renderChart, 300);
+attachInteractive3D('.tilt, .card-3d, .ward-card, .forecast-card, .fc-full-card, .cp-info-card', {
+  intensity: 8,
+  perspective: 760,
+  scale: 1.012,
+  translate: 5
+});
+attachHeroParallax();
+refreshVisualFX();
 
 // Resize chart on window resize
 // Canvas resize observer
@@ -1336,5 +1481,6 @@ document.querySelectorAll('canvas').forEach(canvas => resizeObserver.observe(can
 window.addEventListener('resize', () => { 
   renderChart(); 
   renderDashboard(); 
+  refreshVisualFX();
 });
 
