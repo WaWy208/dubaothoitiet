@@ -1,0 +1,120 @@
+  <div class="forecast-list fade-up d4" id="forecastList"></div>
+
+  <!-- Detail Grid -->
+  <div class="section-title fade-up d5">Chi ti?t th?i ti?t</div>
+  <div class="detail-grid fade-up d5">
+
+    <!-- UV Index -->
+    <div class="detail-card perspective-wrap">
+      <div class="card-3d">
+        <div class="dc-title">Ch?? s?' UV</div>
+        <div class="dc-val" style="color:#f97316;">7</div>
+        <div class="dc-sub">Cao ??" C?n bôi kem ch?'ng n?ng</div>
+        <div class="gauge-wrap">
+          <div class="gauge-bg"></div>
+          <div class="gauge-fill" style="--gauge-rot:70deg;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wind -->
+    <div class="detail-card perspective-wrap">
+      <div class="card-3d">
+        <div class="dc-title">Hu?>ng gió</div>
+        <div class="compass-wrap">
+          <div class="compass">
+            <div class="compass-needle" style="--wind-deg:135deg;"></div>
+            <div class="compass-dirs">
+              <span class="cd-n">B</span><span class="cd-s">N</span>
+              <span class="cd-e">Ð</span><span class="cd-w">T</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:18px;font-weight:700;">18 km/h</div>
+            <div style="font-size:12px;color:var(--muted);">Ðông Nam (ÐN)</div>
+            <div style="font-size:12px;color:var(--muted);">Gi?t: 28 km/h</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Air Quality -->
+    <div class="detail-card wide perspective-wrap">
+      <div class="card-3d">
+        <div class="dc-title">Ch?t lu?ng không khí (AQI)</div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <div>
+            <div class="dc-val" style="color:#22c55e;">52</div>
+            <div class="dc-sub">Trung bình ??" T?'t cho h?u h?t m?i ngu?i</div>
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <div class="aqi-bar"><div class="aqi-marker" style="--aqi-pct:24%;"></div></div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);">
+              <span>T?'t</span><span>TB</span><span>Cao</span><span>X?u</span><span>Nguy hi?fm</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;">
+          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:14px;font-weight:600;">12 µg/m³</div>
+            <div style="font-size:10px;color:var(--muted);">PM2.5</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:14px;font-weight:600;">28 µg/m³</div>
+            <div style="font-size:10px;color:var(--muted);">PM10</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:14px;font-weight:600;">0.03 ppm</div>
+            <div style="font-size:10px;color:var(--muted);">O?,f</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Precipitation -->
+    <div class="detail-card perspective-wrap">
+      <div class="card-3d">
+        <div class="dc-title">Lu?ng mua</div>
+        <div class="dc-val" style="color:#93c5fd;">12.4mm</div>
+        <div class="dc-sub">D? báo hôm nay</div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:11px;color:var(--muted);">Xác su?t mua: 70%</div>
+          <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:6px;overflow:hidden;">
+            <div style="width:70%;height:100%;background:linear-gradient(90deg,#38bdf8,#818cf8);border-radius:4px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dew Point -->
+    <div class="detail-card perspective-wrap">
+      <div class="card-3d">
+        <div class="dc-title">Ði?fm suong & Mây</div>
+        <div class="dc-val">26°C</div>
+        <div class="dc-sub">Ði?fm suong ??" khá ?m</div>
+        <div style="margin-top:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">
+            <span>Ð?T che ph? mây</span><span>65%</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:6px;overflow:hidden;">
+            <div style="width:65%;height:100%;background:linear-gradient(90deg,#94a3b8,#e2e8f0);border-radius:4px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sunrise / Sunset -->
+  <div class="section-title fade-up d5">M?t tr?i & M?t tr?fng</div>
+  <div class="sun-arc fade-up d5">
+    <div class="sun-card">
+      <svg class="sun-arc-svg" viewBox="0 0 340 110" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#f97316;stop-opacity:1"/>
+            <stop offset="50%" style="stop-color:#fde68a;stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:#f97316;stop-opacity:1"/>
+          </linearGradient>
+        </defs>
+        <!-- Ground line -->
