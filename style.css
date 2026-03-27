@@ -132,7 +132,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 
 /* ── CHART ── */
 .chart-wrap{margin:0 24px 20px;background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--radius);padding:16px;backdrop-filter:blur(12px);overflow:hidden;}
-#tempChart{width:100%!important;height:120px!important;}
+canvas{width:100%;height:auto;max-height:250px;display:block;}
 
 /* ── FORECAST ── */
 .forecast-list,.forecast-full{padding:0 24px 20px;display:flex;flex-direction:column;gap:8px;}
@@ -189,14 +189,17 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 
 /* ── SUN ARC ── */
 .dashboard{padding:0 24px 20px;}
-.dash-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:16px;}
-.dash-table-wrap,.dash-chart-wrap{grid-row:1 / -1;}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:start;}
+.dash-table-wrap,.dash-chart-wrap{background:var(--glass);border:1px solid var(--glass-border);border-radius:12px;padding:12px;backdrop-filter:blur(12px);box-shadow:0 10px 30px rgba(0,0,0,0.12);}
+.dash-chart-wrap{min-height:200px;overflow:hidden;}
+.dash-chart-wrap canvas{width:100%;height:auto;display:block;}
 .dash-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
 .dash-table{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden;background:var(--glass);border:1px solid var(--glass-border);font-size:12px;}
 .dash-table thead th{padding:12px 8px;text-align:left;font-weight:600;color:var(--accent);border-bottom:1px solid var(--glass-border);}
 .dash-table td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.05);}
 .dash-table.compact{font-size:11px;}
 .dash-table.compact td{padding:8px 6px;}
+.dash-table-wrap{max-height:420px;overflow:auto;}
 #rainDistrictChart{border-radius:12px;border:1px solid var(--glass-border);background:var(--glass);display:block;}
 .sun-arc{padding:0 24px 20px;}
 .sun-card{background:var(--glass);border:1px solid var(--glass-border);border-radius:var(--radius);padding:20px;backdrop-filter:blur(12px);}
@@ -349,6 +352,8 @@ footer{text-align:center;padding:20px 24px;font-size:11px;color:var(--muted);bor
   .compare-wrap{grid-template-columns:1fr;gap:10px;}
   .cp-vs{padding:0;font-size:16px;}
   .wards-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));}
+  .dash-grid{grid-template-columns:1fr;gap:12px;}
+  .dash-chart-wrap{width:100%;}
 }
 @media(min-width:900px){
   .app{max-width:960px;margin:0 auto;}

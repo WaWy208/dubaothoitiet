@@ -90,7 +90,7 @@
   <div class="tab-nav">
     <button class="tab-btn active" data-tab="home">🏠 Tổng quan</button>
     <button class="tab-btn" data-tab="forecast">📅 7 ngày</button>
-    <button class="tab-btn" data-tab="wards">🗺️ 64 Xã/Phường</button>
+    <button class="tab-btn" data-tab="wards">🗺️ 147 Xã/Phường</button>
     <button class="tab-btn" data-tab="compare">⚖️ So sánh vùng</button>
   </div>
 
@@ -106,22 +106,26 @@
       <button class="alert-close-btn" id="alertClose">✕</button>
     </div>
 
-    <div class="hero fade-up d2">
-      <div class="hero-left">
-        <div class="location" id="heroLocation">📍 Thành phố Cà Mau · Cực Nam Tổ Quốc</div>
-        <div class="city" id="heroCity">Cà Mau</div>
-        <div class="province" id="heroProvince">Tỉnh Cà Mau, Việt Nam</div>
-        <div class="current-temp" id="currentTemp">32<sup id="tempUnitLabel">°C</sup></div>
-        <div class="feels-row" id="feelsLike">Có mây, mưa rải rác — Cảm giác như 36°C</div>
-        <div class="hi-lo-row">
-          <span class="hi-badge">↑ <span id="hiTemp">35</span>°</span>
-          <span class="lo-badge">↓ <span id="loTemp">27</span>°</span>
+    <div class="hero-container fade-up d2">
+      <canvas class="hero-particles" id="particleCanvasRain" style="position:absolute;inset:0;pointer-events:none;z-index:0;"></canvas>
+      <canvas class="hero-particles" id="particleCanvasClouds" style="position:absolute;inset:0;pointer-events:none;z-index:1;"></canvas>
+      <div class="hero" style="position:relative;z-index:2;">
+        <div class="hero-left">
+          <div class="location" id="heroLocation">📍 Thành phố Cà Mau · Cực Nam Tổ Quốc</div>
+          <div class="city" id="heroCity">Cà Mau</div>
+          <div class="province" id="heroProvince">Tỉnh Cà Mau, Việt Nam</div>
+          <div class="current-temp count-up" id="currentTemp" data-target="32">0<sup id="tempUnitLabel">°C</sup></div>
+          <div class="feels-row" id="feelsLike">Có mây, mưa rải rác — Cảm giác như 36°C</div>
+          <div class="hi-lo-row">
+            <span class="hi-badge">↑ <span id="hiTemp" class="count-up" data-target="35">0</span>°</span>
+            <span class="lo-badge">↓ <span id="loTemp" class="count-up" data-target="27">0</span>°</span>
+          </div>
         </div>
-      </div>
-      <div class="hero-right">
-        <span class="weather-icon-3d" id="mainIcon">🌦️</span>
-        <div class="weather-desc" id="mainDesc">Có mây</div>
-        <button class="refresh-btn" id="refreshBtn">↻ Làm mới</button>
+        <div class="hero-right">
+          <span class="weather-icon-3d parallax" id="mainIcon">🌦️</span>
+          <div class="weather-desc" id="mainDesc">Có mây</div>
+          <button class="refresh-btn" id="refreshBtn">↻ Làm mới</button>
+        </div>
       </div>
     </div>
 
@@ -375,7 +379,7 @@
   <div class="bottom-nav-inner">
     <div class="bn-item active" data-tab="home"><span class="bn-icon">🏠</span>Tổng quan</div>
     <div class="bn-item" data-tab="forecast"><span class="bn-icon">📅</span>7 ngày</div>
-<span class="bn-icon">🗺️</span>147 Vùng</div>
+    <div class="bn-item" data-tab="wards"><span class="bn-icon">🗺️</span>147 Vùng</div>
     <div class="bn-item" data-tab="compare"><span class="bn-icon">⚖️</span>So sánh</div>
   </div>
 </div>

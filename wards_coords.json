@@ -1,0 +1,1178 @@
+﻿[
+    {
+        "id":  1,
+        "name":  "PhÆ°á»ng 1",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.22287364346837,
+        "lon":  105.34046160094917
+    },
+    {
+        "id":  2,
+        "name":  "PhÆ°á»ng 2",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.06268211935306,
+        "lon":  105.32236583769834
+    },
+    {
+        "id":  3,
+        "name":  "PhÆ°á»ng 4",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.268235943013838,
+        "lon":  105.21942041701269
+    },
+    {
+        "id":  4,
+        "name":  "PhÆ°á»ng 5",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.363359243205569,
+        "lon":  105.43492924195601
+    },
+    {
+        "id":  5,
+        "name":  "PhÆ°á»ng 6",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.020621133773158,
+        "lon":  105.26340881452197
+    },
+    {
+        "id":  6,
+        "name":  "PhÆ°á»ng 7",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.433689824399236,
+        "lon":  105.23874068942408
+    },
+    {
+        "id":  7,
+        "name":  "PhÆ°á»ng 8",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.323897271416108,
+        "lon":  105.23765246801364
+    },
+    {
+        "id":  8,
+        "name":  "PhÆ°á»ng 9",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.24593834360801,
+        "lon":  105.45564702167273
+    },
+    {
+        "id":  9,
+        "name":  "TÃ¢n XuyÃªn",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.389425010516154,
+        "lon":  105.22158449217109
+    },
+    {
+        "id":  10,
+        "name":  "LÃ½ VÄƒn LÃ¢m",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.46841395890893,
+        "lon":  105.13370930012867
+    },
+    {
+        "id":  11,
+        "name":  "Äá»‹nh BÃ¬nh",
+        "district":  "TP. CÃ  Mau",
+        "province":  "Ca Mau",
+        "lat":  9.247339617342538,
+        "lon":  105.03291188342656
+    },
+    {
+        "id":  12,
+        "name":  "TT. U Minh",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.113481083068077,
+        "lon":  105.12468360671154
+    },
+    {
+        "id":  13,
+        "name":  "KhÃ¡nh HÃ²a",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.335385817583486,
+        "lon":  105.16193238381673
+    },
+    {
+        "id":  14,
+        "name":  "KhÃ¡nh Thuáº­n",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.1505723402066,
+        "lon":  105.02775738854776
+    },
+    {
+        "id":  15,
+        "name":  "Nguyá»…n PhÃ­ch",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.031455410081769,
+        "lon":  105.3046698517424
+    },
+    {
+        "id":  16,
+        "name":  "KhÃ¡nh LÃ¢m",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.186182862039473,
+        "lon":  105.19980870511772
+    },
+    {
+        "id":  17,
+        "name":  "KhÃ¡nh An",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.1696611125763,
+        "lon":  105.12631736507704
+    },
+    {
+        "id":  18,
+        "name":  "VÄ©nh KhÃ¡nh",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.340718727628127,
+        "lon":  105.15222580650857
+    },
+    {
+        "id":  19,
+        "name":  "KhÃ¡nh BÃ¬nh TÃ¢y",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.04990549148027,
+        "lon":  105.42164274177209
+    },
+    {
+        "id":  20,
+        "name":  "KhÃ¡nh BÃ¬nh ÄÃ´ng",
+        "district":  "U Minh",
+        "province":  "Ca Mau",
+        "lat":  9.344254281262334,
+        "lon":  105.1915867425332
+    },
+    {
+        "id":  21,
+        "name":  "TT. Thá»›i BÃ¬nh",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.455365961037408,
+        "lon":  105.44962079953858
+    },
+    {
+        "id":  22,
+        "name":  "Biá»ƒn Báº¡ch",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.432785253538322,
+        "lon":  105.13353713458189
+    },
+    {
+        "id":  23,
+        "name":  "Biá»ƒn Báº¡ch ÄÃ´ng",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.254963428486205,
+        "lon":  105.45671557368382
+    },
+    {
+        "id":  24,
+        "name":  "TÃ¢n Báº±ng",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.29807761347151,
+        "lon":  105.4449951060635
+    },
+    {
+        "id":  25,
+        "name":  "Thá»›i BÃ¬nh",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.126865601593837,
+        "lon":  105.18718120496013
+    },
+    {
+        "id":  26,
+        "name":  "TÃ¢n PhÃº",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.187505727921348,
+        "lon":  105.49866365156711
+    },
+    {
+        "id":  27,
+        "name":  "TrÃ­ Pháº£i",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.0194457681469,
+        "lon":  105.1804790097594
+    },
+    {
+        "id":  28,
+        "name":  "TrÃ­ Lá»±c",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.014979879833579,
+        "lon":  105.21410126878723
+    },
+    {
+        "id":  29,
+        "name":  "Há»“ Thá»‹ Ká»·",
+        "district":  "Thá»›i BÃ¬nh",
+        "province":  "Ca Mau",
+        "lat":  9.186707796714566,
+        "lon":  105.40496907100443
+    },
+    {
+        "id":  30,
+        "name":  "TT. Tráº§n VÄƒn Thá»i",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.005549056643877,
+        "lon":  105.08111504540032
+    },
+    {
+        "id":  31,
+        "name":  "TT. SÃ´ng Äá»‘c",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.175008298894817,
+        "lon":  105.38216159483562
+    },
+    {
+        "id":  32,
+        "name":  "KhÃ¡nh BÃ¬nh",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.29839881352239,
+        "lon":  105.20141572142641
+    },
+    {
+        "id":  33,
+        "name":  "KhÃ¡nh Háº£i",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.363960122100902,
+        "lon":  105.14652066626462
+    },
+    {
+        "id":  34,
+        "name":  "Phong Äiá»n",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.490947674648224,
+        "lon":  105.03646911293478
+    },
+    {
+        "id":  35,
+        "name":  "Lá»£i An",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.434195982140048,
+        "lon":  105.3096154744034
+    },
+    {
+        "id":  36,
+        "name":  "Tráº§n Há»£i",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.016712162254608,
+        "lon":  105.28961149154262
+    },
+    {
+        "id":  37,
+        "name":  "Phong Láº¡c",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.156101637382928,
+        "lon":  105.04257510188687
+    },
+    {
+        "id":  38,
+        "name":  "Äáº¥t MÅ©i",
+        "district":  "Ngá»c Hiá»ƒn",
+        "province":  "Ca Mau",
+        "lat":  9.29899313726546,
+        "lon":  105.01044063324233
+    },
+    {
+        "id":  39,
+        "name":  "Nguyá»…n HuÃ¢n",
+        "district":  "Tráº§n VÄƒn Thá»i",
+        "province":  "Ca Mau",
+        "lat":  9.007660209165008,
+        "lon":  105.29183940528262
+    },
+    {
+        "id":  40,
+        "name":  "TT. CÃ¡i NÆ°á»›c",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.279146483342881,
+        "lon":  105.2906474099551
+    },
+    {
+        "id":  41,
+        "name":  "Tháº¡nh PhÃº",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.478996904582917,
+        "lon":  105.20808794408059
+    },
+    {
+        "id":  42,
+        "name":  "TÃ¢n HÆ°ng ÄÃ´ng",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.352609411119783,
+        "lon":  105.29085529441066
+    },
+    {
+        "id":  43,
+        "name":  "Tráº§n Thá»›i",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.458593664807623,
+        "lon":  105.45347978676656
+    },
+    {
+        "id":  44,
+        "name":  "ÄÃ´ng Thá»›i",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.403796552128863,
+        "lon":  105.03591184749637
+    },
+    {
+        "id":  45,
+        "name":  "LÆ°Æ¡ng Tháº¿ TrÃ¢n",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.230109547775378,
+        "lon":  105.18473342226683
+    },
+    {
+        "id":  46,
+        "name":  "PhÃº HÆ°ng",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.087742367158286,
+        "lon":  105.04194076703071
+    },
+    {
+        "id":  47,
+        "name":  "HÆ°ng Má»¹",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.25324792387809,
+        "lon":  105.28961957694769
+    },
+    {
+        "id":  48,
+        "name":  "TÃ¢n HÆ°ng",
+        "district":  "CÃ¡i NÆ°á»›c",
+        "province":  "Ca Mau",
+        "lat":  9.340968403926468,
+        "lon":  105.05739210359705
+    },
+    {
+        "id":  49,
+        "name":  "TT. Äáº§m DÆ¡i",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.18967507993763,
+        "lon":  105.1800900310603
+    },
+    {
+        "id":  50,
+        "name":  "TÃ¢n DÃ¢n",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.002655248605702,
+        "lon":  105.05605892445013
+    },
+    {
+        "id":  51,
+        "name":  "QuÃ¡ch Pháº©m",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.407956072529908,
+        "lon":  105.00593402476125
+    },
+    {
+        "id":  52,
+        "name":  "QuÃ¡ch Pháº©m Báº¯c",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.377015581284649,
+        "lon":  105.01347203077816
+    },
+    {
+        "id":  53,
+        "name":  "Táº¡ An KhÆ°Æ¡ng",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.450617710906162,
+        "lon":  105.20525346894556
+    },
+    {
+        "id":  54,
+        "name":  "Táº¡ An KhÆ°Æ¡ng Nam",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.447954423198837,
+        "lon":  105.37250591484457
+    },
+    {
+        "id":  55,
+        "name":  "Nguyá»…n HuÃ¢n Äáº§m DÆ¡i",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.333396964454842,
+        "lon":  105.25561221729546
+    },
+    {
+        "id":  56,
+        "name":  "Thanh TÃ¹ng",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.430272269511601,
+        "lon":  105.17487716254576
+    },
+    {
+        "id":  57,
+        "name":  "Ngá»c ChÃ¡nh",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.15880505801067,
+        "lon":  105.42873547120135
+    },
+    {
+        "id":  58,
+        "name":  "TÃ¢n Trung",
+        "district":  "Äáº§m DÆ¡i",
+        "province":  "Ca Mau",
+        "lat":  9.457624806943357,
+        "lon":  105.36262527659733
+    },
+    {
+        "id":  59,
+        "name":  "TT. NÄƒm CÄƒn",
+        "district":  "NÄƒm CÄƒn",
+        "province":  "Ca Mau",
+        "lat":  9.003258428564855,
+        "lon":  105.0397204894266
+    },
+    {
+        "id":  60,
+        "name":  "HÃ m Rá»“ng",
+        "district":  "NÄƒm CÄƒn",
+        "province":  "Ca Mau",
+        "lat":  9.199545000912822,
+        "lon":  105.2427818071258
+    },
+    {
+        "id":  61,
+        "name":  "Äáº¥t Má»›i",
+        "district":  "NÄƒm CÄƒn",
+        "province":  "Ca Mau",
+        "lat":  9.300237132303499,
+        "lon":  105.3429615749593
+    },
+    {
+        "id":  62,
+        "name":  "LÃ¢m Háº£i",
+        "district":  "NÄƒm CÄƒn",
+        "province":  "Ca Mau",
+        "lat":  9.043193908397622,
+        "lon":  105.34040935602393
+    },
+    {
+        "id":  63,
+        "name":  "HÃ ng Vá»‹nh",
+        "district":  "NÄƒm CÄƒn",
+        "province":  "Ca Mau",
+        "lat":  9.307616677222963,
+        "lon":  105.08278402993699
+    },
+    {
+        "id":  64,
+        "name":  "Tam Giang",
+        "district":  "NÄƒm CÄƒn",
+        "province":  "Ca Mau",
+        "lat":  9.042669648141176,
+        "lon":  105.3937665267666
+    },
+    {
+        "id":  65,
+        "name":  "Tam Giang ÄÃ´ng",
+        "district":  "NÄƒm CÄƒn",
+        "province":  "Ca Mau",
+        "lat":  9.318207328559797,
+        "lon":  105.27331786732135
+    },
+    {
+        "id":  66,
+        "name":  "TT. CÃ¡i ÄÃ´i VÃ m",
+        "district":  "PhÃº TÃ¢n",
+        "province":  "Ca Mau",
+        "lat":  9.123725338047583,
+        "lon":  105.2588100968529
+    },
+    {
+        "id":  67,
+        "name":  "PhÃº TÃ¢n",
+        "district":  "PhÃº TÃ¢n",
+        "province":  "Ca Mau",
+        "lat":  9.486219994418926,
+        "lon":  105.00714120979629
+    },
+    {
+        "id":  68,
+        "name":  "TÃ¢n Háº£i",
+        "district":  "PhÃº TÃ¢n",
+        "province":  "Ca Mau",
+        "lat":  9.480140020473723,
+        "lon":  105.01831702387132
+    },
+    {
+        "id":  69,
+        "name":  "Viá»‡t Tháº¯ng",
+        "district":  "PhÃº TÃ¢n",
+        "province":  "Ca Mau",
+        "lat":  9.094698571066923,
+        "lon":  105.436166435214
+    },
+    {
+        "id":  70,
+        "name":  "Ráº¡ch ChÃ¨o",
+        "district":  "PhÃº TÃ¢n",
+        "province":  "Ca Mau",
+        "lat":  9.414474160687677,
+        "lon":  105.36397173621478
+    },
+    {
+        "id":  71,
+        "name":  "PhÃº Má»¹",
+        "district":  "PhÃº TÃ¢n",
+        "province":  "Ca Mau",
+        "lat":  9.212933030312774,
+        "lon":  105.35130185944678
+    },
+    {
+        "id":  72,
+        "name":  "TT. Ráº¡ch Gá»‘c",
+        "district":  "Ngá»c Hiá»ƒn",
+        "province":  "Ca Mau",
+        "lat":  9.168115281758634,
+        "lon":  105.11017555588381
+    },
+    {
+        "id":  73,
+        "name":  "TÃ¢n Ã‚n TÃ¢y",
+        "district":  "Ngá»c Hiá»ƒn",
+        "province":  "Ca Mau",
+        "lat":  9.25368299831529,
+        "lon":  105.03752322136967
+    },
+    {
+        "id":  74,
+        "name":  "TÃ¢n Ã‚n",
+        "district":  "Ngá»c Hiá»ƒn",
+        "province":  "Ca Mau",
+        "lat":  9.326264657666657,
+        "lon":  105.05958980440887
+    },
+    {
+        "id":  75,
+        "name":  "ViÃªn An ÄÃ´ng",
+        "district":  "Ngá»c Hiá»ƒn",
+        "province":  "Ca Mau",
+        "lat":  9.097453710309546,
+        "lon":  105.48400993927409
+    },
+    {
+        "id":  76,
+        "name":  "ViÃªn An",
+        "district":  "Ngá»c Hiá»ƒn",
+        "province":  "Ca Mau",
+        "lat":  9.455492427579422,
+        "lon":  105.34874934712859
+    },
+    {
+        "id":  77,
+        "name":  "PhÆ°á»ng 1",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.445944558582696,
+        "lon":  105.41459697527425
+    },
+    {
+        "id":  78,
+        "name":  "PhÆ°á»ng 2",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.474793618306931,
+        "lon":  105.04439713102607
+    },
+    {
+        "id":  79,
+        "name":  "PhÆ°á»ng 3",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.062118036486984,
+        "lon":  105.10840561666842
+    },
+    {
+        "id":  80,
+        "name":  "PhÆ°á»ng 4",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.375813028182588,
+        "lon":  105.31975895896196
+    },
+    {
+        "id":  81,
+        "name":  "NhÃ  BÃ ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.059158554332765,
+        "lon":  105.06472690919047
+    },
+    {
+        "id":  82,
+        "name":  "VÄ©nh Trinh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.081157586819964,
+        "lon":  105.42586371258083
+    },
+    {
+        "id":  83,
+        "name":  "VÄ©nh Má»¹",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.048935799083964,
+        "lon":  105.02194240968169
+    },
+    {
+        "id":  84,
+        "name":  "Hiá»‡p ThÃ nh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.278685100219008,
+        "lon":  105.10196883262397
+    },
+    {
+        "id":  85,
+        "name":  "VÄ©nh Háº­u A",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.46210375237864,
+        "lon":  105.0925611253218
+    },
+    {
+        "id":  86,
+        "name":  "VÄ©nh Háº­u B",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.012524675433452,
+        "lon":  105.13817448512353
+    },
+    {
+        "id":  87,
+        "name":  "VÄ©nh Má»¹ B",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.268080194548732,
+        "lon":  105.31927979083748
+    },
+    {
+        "id":  88,
+        "name":  "HoÃ  Má»¹",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.30260276968135,
+        "lon":  105.11686144244122
+    },
+    {
+        "id":  89,
+        "name":  "LÃª Thá»‹ RiÃªng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.28528447537248,
+        "lon":  105.24582230437167
+    },
+    {
+        "id":  90,
+        "name":  "HÃ²a Minh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.450001214516234,
+        "lon":  105.47904043645718
+    },
+    {
+        "id":  91,
+        "name":  "HÃ²a An",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.22486671616278,
+        "lon":  105.05038966196555
+    },
+    {
+        "id":  92,
+        "name":  "VÄ©nh Má»¹ A",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.020224066266353,
+        "lon":  105.40121357888256
+    },
+    {
+        "id":  93,
+        "name":  "HÃ²a Tháº¡nh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.139700856090817,
+        "lon":  105.13396903597655
+    },
+    {
+        "id":  94,
+        "name":  "HÃ²a PhÃº",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.323965667292612,
+        "lon":  105.2481277672689
+    },
+    {
+        "id":  95,
+        "name":  "Há»“ng DÃ¢n",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.470533238142187,
+        "lon":  105.00974814889878
+    },
+    {
+        "id":  96,
+        "name":  "Ninh Quá»›i A",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.271359272874442,
+        "lon":  105.2954728637706
+    },
+    {
+        "id":  97,
+        "name":  "Ninh Quá»›i Trung",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.090733381949434,
+        "lon":  105.29871562995943
+    },
+    {
+        "id":  98,
+        "name":  "Ninh Quá»›i B",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.43698242582465,
+        "lon":  105.21794668864686
+    },
+    {
+        "id":  99,
+        "name":  "Tháº¡nh Lá»™c",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.487779275245286,
+        "lon":  105.31866796569724
+    },
+    {
+        "id":  100,
+        "name":  "Thá»›i Háº­u B",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.351065891133306,
+        "lon":  105.13396674412223
+    },
+    {
+        "id":  101,
+        "name":  "Thá»›i Háº­u A",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.29530711586652,
+        "lon":  105.18076129602221
+    },
+    {
+        "id":  102,
+        "name":  "Linh Háº£i",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.493112210565,
+        "lon":  105.39260765552366
+    },
+    {
+        "id":  103,
+        "name":  "Äáº¡i GiÃ£",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.409955625084445,
+        "lon":  105.28751819869575
+    },
+    {
+        "id":  104,
+        "name":  "Phong Tháº¡nh TÃ¢y",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.183937511981801,
+        "lon":  105.38512099297057
+    },
+    {
+        "id":  105,
+        "name":  "HÆ°ng PhÆ°á»›c",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.151350693655903,
+        "lon":  105.09135901894894
+    },
+    {
+        "id":  106,
+        "name":  "HÆ°ng Má»¹",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.140921967989954,
+        "lon":  105.2005687106519
+    },
+    {
+        "id":  107,
+        "name":  "HÆ°ng Thanh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.24142805000923,
+        "lon":  105.45074903928968
+    },
+    {
+        "id":  108,
+        "name":  "PhÆ°á»›c Long",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.48837002008313,
+        "lon":  105.06961751269745
+    },
+    {
+        "id":  109,
+        "name":  "NÃ´ng TrÆ°á»ng Viá»‡t Tháº¯ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.181380287392328,
+        "lon":  105.37102793102247
+    },
+    {
+        "id":  110,
+        "name":  "VÄ©nh PhÃº ÄÃ´ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.162278867689455,
+        "lon":  105.28579589584808
+    },
+    {
+        "id":  111,
+        "name":  "VÄ©nh PhÃº TÃ¢y",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.304563390309363,
+        "lon":  105.40979666580586
+    },
+    {
+        "id":  112,
+        "name":  "VÄ©nh ChÃ¢u A",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.148903184698574,
+        "lon":  105.15175855417561
+    },
+    {
+        "id":  113,
+        "name":  "VÄ©nh Lá»£i",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.395931436222313,
+        "lon":  105.02726186244985
+    },
+    {
+        "id":  114,
+        "name":  "VÄ©nh Háº­u",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.400350720537407,
+        "lon":  105.2807641449271
+    },
+    {
+        "id":  115,
+        "name":  "VÄ©nh Trinh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.465956969200175,
+        "lon":  105.15608385624044
+    },
+    {
+        "id":  116,
+        "name":  "VÄ©nh ChÃ¢u B",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.03971505690436,
+        "lon":  105.18387776801292
+    },
+    {
+        "id":  117,
+        "name":  "Háº­u Tháº¡nh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.042496999898058,
+        "lon":  105.2051182100929
+    },
+    {
+        "id":  118,
+        "name":  "TÃ¢n Tháº¡nh ÄÃ´ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.26283544503978,
+        "lon":  105.2234884422323
+    },
+    {
+        "id":  119,
+        "name":  "TÃ¢n Tháº¡nh TÃ¢y",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.249809580303351,
+        "lon":  105.11141017470378
+    },
+    {
+        "id":  120,
+        "name":  "TÃ¢n HÆ°ng TÃ¢y",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.204139213216457,
+        "lon":  105.02134759621774
+    },
+    {
+        "id":  121,
+        "name":  "Long Tháº¡nh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.328686962661648,
+        "lon":  105.06454568542703
+    },
+    {
+        "id":  122,
+        "name":  "TT. ÄÃ´ng Háº£i",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.246026404807045,
+        "lon":  105.42260817468667
+    },
+    {
+        "id":  123,
+        "name":  "HÃ²a ÄÃ´ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.29867246925016,
+        "lon":  105.13865955607714
+    },
+    {
+        "id":  124,
+        "name":  "An Tráº¡ch",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.271496685406857,
+        "lon":  105.03998238915902
+    },
+    {
+        "id":  125,
+        "name":  "An Tráº¡ch A",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.015519528863377,
+        "lon":  105.16070535063581
+    },
+    {
+        "id":  126,
+        "name":  "ÄÃ´ng Háº£i 1",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.209579187915098,
+        "lon":  105.16686806972216
+    },
+    {
+        "id":  127,
+        "name":  "ÄÃ´ng Háº£i 2",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.380677774937974,
+        "lon":  105.36544474468094
+    },
+    {
+        "id":  128,
+        "name":  "Háº£i Tráº¡ch",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.292933570527094,
+        "lon":  105.02456899617455
+    },
+    {
+        "id":  129,
+        "name":  "Ngá»c HÆ°ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.279782692173727,
+        "lon":  105.17470574041882
+    },
+    {
+        "id":  130,
+        "name":  "TT. GiÃ¡ Rai",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.12197052518737,
+        "lon":  105.37530350118831
+    },
+    {
+        "id":  131,
+        "name":  "HÆ°ng Há»™i",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.407261411474925,
+        "lon":  105.22589182844614
+    },
+    {
+        "id":  132,
+        "name":  "HÆ°ng PhÆ°á»›c",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.449163278774611,
+        "lon":  105.33760085785484
+    },
+    {
+        "id":  133,
+        "name":  "Lá»™c HÆ°ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.435108440737812,
+        "lon":  105.27974166252392
+    },
+    {
+        "id":  134,
+        "name":  "Phong Láº­p",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.319066450083183,
+        "lon":  105.46175695393505
+    },
+    {
+        "id":  135,
+        "name":  "Phong Tháº¡nh ÄÃ´ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.470170494180616,
+        "lon":  105.09996060703502
+    },
+    {
+        "id":  136,
+        "name":  "TÃ¢n Phong",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.002868492567266,
+        "lon":  105.14948461087519
+    },
+    {
+        "id":  137,
+        "name":  "TÃ¢n Tháº¡nh",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.358275488889964,
+        "lon":  105.27179120534161
+    },
+    {
+        "id":  138,
+        "name":  "VÄ©nh Lá»™c",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.273583959030802,
+        "lon":  105.28433166055255
+    },
+    {
+        "id":  139,
+        "name":  "VÄ©nh HÆ°ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.21750623065009,
+        "lon":  105.00851656671368
+    },
+    {
+        "id":  140,
+        "name":  "Biá»ƒn HÆ°ng",
+        "district":  "Báº¡c LiÃªu (cÅ©)",
+        "province":  "Ca Mau",
+        "lat":  9.361086533347537,
+        "lon":  105.2596422442524
+    },
+    {
+        "id":  141,
+        "name":  "Xa_141",
+        "district":  "Huyen_6",
+        "province":  "Ca Mau",
+        "lat":  9.407250195491077,
+        "lon":  105.04259724628076
+    },
+    {
+        "id":  142,
+        "name":  "Xa_142",
+        "district":  "Huyen_7",
+        "province":  "Ca Mau",
+        "lat":  9.261274408415781,
+        "lon":  105.33251559731356
+    },
+    {
+        "id":  143,
+        "name":  "Xa_143",
+        "district":  "Huyen_8",
+        "province":  "Ca Mau",
+        "lat":  9.340801459925434,
+        "lon":  105.27197073693642
+    },
+    {
+        "id":  144,
+        "name":  "Xa_144",
+        "district":  "Huyen_9",
+        "province":  "Ca Mau",
+        "lat":  9.377519654203908,
+        "lon":  105.04802130127185
+    },
+    {
+        "id":  145,
+        "name":  "Xa_145",
+        "district":  "Huyen_1",
+        "province":  "Ca Mau",
+        "lat":  9.039929451046413,
+        "lon":  105.27502020447652
+    },
+    {
+        "id":  146,
+        "name":  "Xa_146",
+        "district":  "Huyen_2",
+        "province":  "Ca Mau",
+        "lat":  9.10582577643639,
+        "lon":  105.0896857465864
+    },
+    {
+        "id":  147,
+        "name":  "Xa_147",
+        "district":  "Huyen_3",
+        "province":  "Ca Mau",
+        "lat":  9.154047470695147,
+        "lon":  105.37880696321663
+    }
+]

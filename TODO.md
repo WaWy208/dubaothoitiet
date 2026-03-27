@@ -1,30 +1,33 @@
-# TODO: Implement Cà Mau Mới (Cà Mau + Bạc Liêu cũ)
+## TODO - Weather App Fixes
 
-## Approved Plan Steps:
-- [ ] Step 1: Create TODO.md (current)
-- [x] Step 1: Create TODO.md ✓
-- [x] Step 2: Edit script.js - Add 71 new WARDS entries for Bạc Liêu (cũ), update comments/counts ✓
-- [x] Step 1: Create TODO.md ✓
-- [x] Step 2: Edit script.js - Add 71 new WARDS entries for Bạc Liêu (cũ), update comments/counts ✓
-- [x] Step 3: Edit index.html - Add "Bạc Liêu (cũ)" to district filters/tabs, update titles to 147 locations, app title ✓
-- [x] Step 4: Test app (open index.html, verify new locations in search/map/compare) ✓ - WARDS now 140+ entries, filters/tabs updated, UI reflects 147 locations, search works for Bạc Liêu (cũ)
-- [x] Step 5: Update TODO.md with progress ✓
-- [x] Step 6: Task complete
-- [ ] Step 6: attempt_completion
+### Plan Implementation Steps:
 
-## NEW TASK 1: Dashboard tables ✓ COMPLETE
+#### 1. **Fix script.js** ✅ **DONE**
+   - Rename duplicate "Nguyễn Huân" (id 55 → "Nguyễn Huân Đầm Dơi") ✅
+   - Update all "64" → "147" comments/counts ✅
+   - Simplify search/compare picking (remove risky patches) ✅
+   - Add canvas resize observer for charts ✅
 
-## NEW TASK 3: Real-time + Farmer recommendations
+#### 2. **Fix index.html** ✅ **DONE**
+   - Fix malformed bottom-nav HTML (add bn-item wrapper for wards) ✅
+   - Consistent "147" count in wards-topbar ✅
 
-- [ ] Step 17: Update TODO.md
-- [ ] Step 18: Add real-time weather API (OpenWeatherMap free) in script.js
-- [ ] Step 19: Update WARDS/FORECAST/HOURS with API data
-- [ ] Step 20: Add farmer advice section (based on temp/rain/wind, e.g. "Tránh phun thuốc mưa >70%")
-- [ ] Step 21: Auto-update every 10min + manual refresh
-- [ ] Step 22: Test & complete
-- [ ] Step 4: Test app (open index.html, verify new locations in search/map/compare)
-- [ ] Step 5: Update TODO.md with progress
-- [ ] Step 6: attempt_completion
+#### 3. **Fix style.css** ✅ **DONE**
+   - Canvas max-width:100% ✅
+   - Mobile dash-grid tweaks ✅
 
-**Status: Starting Step 2**
+#### 4. **New Task: Add Animations + 3D Effects** ✅ **IN PROGRESS**
+   - Hero: Particle rain/clouds + temp number morphing
+   - Cards: Enhanced 3D tilt + hover lift
+   - Charts: Animated draw lines/bars
+   - Wards grid: Stagger fade-in + scale
+   - Loading: Skeleton screens + progress
+   - Background: Dynamic sky transitions
+
+#### 5. **Completion** [PENDING]
+
+**Progress: 3/6 → Implementing animations**
+
+
+
 

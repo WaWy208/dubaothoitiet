@@ -1,120 +1,130 @@
-  <div class="forecast-list fade-up d4" id="forecastList"></div>
+"""
+Real-time weather fetcher for OpenWeatherMap.
 
-  <!-- Detail Grid -->
-  <div class="section-title fade-up d5">Chi ti?t th?i ti?t</div>
-  <div class="detail-grid fade-up d5">
+Usage:
+  python real_time_weather.py all          # fetch predefined city list
+  python real_time_weather.py "City,VN"    # fetch a single city
 
-    <!-- UV Index -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Ch?? s?' UV</div>
-        <div class="dc-val" style="color:#f97316;">7</div>
-        <div class="dc-sub">Cao ??" C?n bÙi kem ch?'ng n?ng</div>
-        <div class="gauge-wrap">
-          <div class="gauge-bg"></div>
-          <div class="gauge-fill" style="--gauge-rot:70deg;"></div>
-        </div>
-      </div>
-    </div>
+Outputs compact JSON to stdout for server.py to cache:
+{
+  "status": "ok",
+  "updated": "2026-03-27T16:25:00Z",
+  "data": [
+    {"city":"Ca Mau","temp":30.4,"feels":33.1,"desc":"C√≥ m√¢y", ...}
+  ]
+}
+"""
 
-    <!-- Wind -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Hu?>ng giÛ</div>
-        <div class="compass-wrap">
-          <div class="compass">
-            <div class="compass-needle" style="--wind-deg:135deg;"></div>
-            <div class="compass-dirs">
-              <span class="cd-n">B</span><span class="cd-s">N</span>
-              <span class="cd-e">–</span><span class="cd-w">T</span>
-            </div>
-          </div>
-          <div>
-            <div style="font-size:18px;font-weight:700;">18 km/h</div>
-            <div style="font-size:12px;color:var(--muted);">–Ùng Nam (–N)</div>
-            <div style="font-size:12px;color:var(--muted);">Gi?t: 28 km/h</div>
-          </div>
-        </div>
-      </div>
-    </div>
+import json
+import os
+import sys
+from datetime import datetime, timezone
 
-    <!-- Air Quality -->
-    <div class="detail-card wide perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Ch?t lu?ng khÙng khÌ (AQI)</div>
-        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-          <div>
-            <div class="dc-val" style="color:#22c55e;">52</div>
-            <div class="dc-sub">Trung bÏnh ??" T?'t cho h?u h?t m?i ngu?i</div>
-          </div>
-          <div style="flex:1;min-width:160px;">
-            <div class="aqi-bar"><div class="aqi-marker" style="--aqi-pct:24%;"></div></div>
-            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);">
-              <span>T?'t</span><span>TB</span><span>Cao</span><span>X?u</span><span>Nguy hi?fm</span>
-            </div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;">
-          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:14px;font-weight:600;">12 µg/m≥</div>
-            <div style="font-size:10px;color:var(--muted);">PM2.5</div>
-          </div>
-          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:14px;font-weight:600;">28 µg/m≥</div>
-            <div style="font-size:10px;color:var(--muted);">PM10</div>
-          </div>
-          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:14px;font-weight:600;">0.03 ppm</div>
-            <div style="font-size:10px;color:var(--muted);">O?,f</div>
-          </div>
-        </div>
-      </div>
-    </div>
+import requests
 
-    <!-- Precipitation -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Lu?ng mua</div>
-        <div class="dc-val" style="color:#93c5fd;">12.4mm</div>
-        <div class="dc-sub">D? b·o hÙm nay</div>
-        <div style="margin-top:10px;display:flex;flex-direction:column;gap:4px;">
-          <div style="font-size:11px;color:var(--muted);">X·c su?t mua: 70%</div>
-          <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:6px;overflow:hidden;">
-            <div style="width:70%;height:100%;background:linear-gradient(90deg,#38bdf8,#818cf8);border-radius:4px;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
+# ---- CONFIG ----
+API_KEY = os.getenv("OWM_API_KEY") or "7f318ae139397881686e5acd8dce296c"
+# Main cities that represent the app area
+DEFAULT_CITIES = [
+    "Ca Mau,VN",
+    "Bac Lieu,VN",
+    "Nha Trang,VN",  # fallback coastal reference
+]
 
-    <!-- Dew Point -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">–i?fm suong & M‚y</div>
-        <div class="dc-val">26∞C</div>
-        <div class="dc-sub">–i?fm suong ??" kh· ?m</div>
-        <div style="margin-top:10px;">
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">
-            <span>–?T che ph? m‚y</span><span>65%</span>
-          </div>
-          <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:6px;overflow:hidden;">
-            <div style="width:65%;height:100%;background:linear-gradient(90deg,#94a3b8,#e2e8f0);border-radius:4px;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-  </div>
+def kmh_from_ms(speed_ms: float) -> float:
+    return round(speed_ms * 3.6, 1)
 
-  <!-- Sunrise / Sunset -->
-  <div class="section-title fade-up d5">M?t tr?i & M?t tr?fng</div>
-  <div class="sun-arc fade-up d5">
-    <div class="sun-card">
-      <svg class="sun-arc-svg" viewBox="0 0 340 110" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color:#f97316;stop-opacity:1"/>
-            <stop offset="50%" style="stop-color:#fde68a;stop-opacity:1"/>
-            <stop offset="100%" style="stop-color:#f97316;stop-opacity:1"/>
-          </linearGradient>
-        </defs>
-        <!-- Ground line -->
+
+def emoji_for(code: int) -> str:
+    # Simple mapping sufficient for UI hero text
+    if 200 <= code < 300:
+        return "‚õàÔ∏è"
+    if 300 <= code < 600:
+        return "üåßÔ∏è"
+    if 600 <= code < 700:
+        return "‚ùÑÔ∏è"
+    if 700 <= code < 800:
+        return "üå´Ô∏è"
+    if code == 800:
+        return "‚òÄÔ∏è"
+    if 801 <= code <= 802:
+        return "üå§Ô∏è"
+    return "‚òÅÔ∏è"
+
+
+def fetch_city(city_query: str):
+    url = "https://api.openweathermap.org/data/2.5/weather"
+    params = {
+        "q": city_query,
+        "appid": API_KEY,
+        "units": "metric",
+        "lang": "vi",
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        weather = data["weather"][0]
+        main = data["main"]
+        wind = data.get("wind", {})
+        rain = data.get("rain", {})
+        rain_mm = rain.get("1h") or rain.get("3h") or 0
+
+        return {
+            "city": data.get("name", city_query),
+            "country": data.get("sys", {}).get("country", ""),
+            "temp": round(main.get("temp", 0), 1),
+            "feels": round(main.get("feels_like", main.get("temp", 0)), 1),
+            "desc": weather.get("description", "").capitalize(),
+            "humidity": main.get("humidity", 0),
+            "wind": kmh_from_ms(wind.get("speed", 0)),
+            "rain": round(rain_mm, 1),
+            "icon": emoji_for(weather.get("id", 800)),
+            "updated": datetime.fromtimestamp(data.get("dt", 0), tz=timezone.utc).strftime(
+                "%H:%M UTC"
+            ),
+        }
+    except Exception as e:  # noqa: BLE001 - want resilience per city
+        return {"city": city_query, "error": str(e)}
+
+
+def build_city_list(args):
+    if len(args) >= 2 and args[1].lower() != "all":
+        return [args[1]]
+    return DEFAULT_CITIES
+
+
+def main():
+    cities = build_city_list(sys.argv)
+    results = [fetch_city(c) for c in cities]
+    ok = [r for r in results if "error" not in r]
+    if not ok:
+        # Fallback static sample so UI still has data if API/network fails.
+        ok = [
+            {
+                "city": "Ca Mau",
+                "country": "VN",
+                "temp": 30.0,
+                "feels": 33.0,
+                "desc": "C√≥ m√¢y",
+                "humidity": 82,
+                "wind": 18.0,
+                "rain": 40,
+                "icon": "üå§Ô∏è",
+                "updated": datetime.now(timezone.utc).strftime("%H:%M UTC"),
+            }
+        ]
+    status = "ok" if ok else "error"
+    out = {
+        "status": status,
+        "updated": datetime.now(timezone.utc).isoformat(),
+        "data": ok,
+        "errors": [r for r in results if "error" in r],
+    }
+    print(json.dumps(out, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+

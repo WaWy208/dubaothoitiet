@@ -15,7 +15,7 @@ const STATE = {
   currentDistrict: 'all'
 };
 
-// ── 64 XÃ / PHƯỜNG / THỊ TRẤN CÀ MAU ──
+// ── 147 XÃ / PHƯỜNG / THỊ TRẤN CÀ MAU MỚI (Cà Mau + Bạc Liêu cũ) ──
 const WARDS = [
   // TP. CÀ MAU (9 phường + 1 xã)
   { id:1,  name:'Phường 1',       district:'TP. Cà Mau', type:'Phường', icon:'🌆', temp:32, hi:35, lo:27, rain:65, humidity:82, wind:18, aqi:50, desc:'Mưa rào', features:['Trung tâm thành phố','Khu dân cư đông đúc'], alert:null, note:'Khu vực trung tâm hành chính. Nhiệt độ cao do bê-tông hóa, ít cây xanh.' },
@@ -82,7 +82,7 @@ const WARDS = [
   { id:52, name:'Quách Phẩm Bắc',   district:'Đầm Dơi', type:'Xã',       icon:'🌾', temp:31, hi:34, lo:26, rain:69, humidity:82, wind:16, aqi:45, desc:'Có mây',   features:['Tôm sú','Kênh chính'],                      alert:null, note:'Có hệ thống kênh dẫn nước tốt. Nuôi tôm sú năng suất cao.' },
   { id:53, name:'Tạ An Khương',     district:'Đầm Dơi', type:'Xã',       icon:'🌊', temp:30, hi:33, lo:25, rain:74, humidity:86, wind:16, aqi:41, desc:'Mưa nhẹ',  features:['Ven biển','Nuôi nghêu'],                    alert:null, note:'Ven biển Đông. Nghề nuôi nghêu, sò huyết phát triển.' },
   { id:54, name:'Tạ An Khương Nam', district:'Đầm Dơi', type:'Xã',       icon:'🌊', temp:30, hi:33, lo:25, rain:75, humidity:87, wind:17, aqi:40, desc:'Mưa rào',  features:['Rừng ngập mặn','Ven biển Đông'],            alert:null, note:'Rừng ngập mặn dày đặc ven biển Đông. Chắn sóng hiệu quả, bảo vệ đất liền.' },
-  { id:55, name:'Nguyễn Huân',      district:'Đầm Dơi', type:'Xã',       icon:'🌿', temp:30, hi:33, lo:25, rain:73, humidity:86, wind:15, aqi:42, desc:'Có mây',   features:['Lúa tôm','Vùng ven'],                       alert:null, note:'Mô hình lúa-tôm bền vững. Thời tiết đều hòa, ít thiên tai cực đoan.' },
+{ id:55, name:'Nguyễn Huân Đầm Dơi',      district:'Đầm Dơi', type:'Xã',       icon:'🌿', temp:30, hi:33, lo:25, rain:73, humidity:86, wind:15, aqi:42, desc:'Có mây',   features:['Lúa tôm','Vùng ven'],                       alert:null, note:'Mô hình lúa-tôm bền vững. Thời tiết đều hòa, ít thiên tai cực đoan.' },
   { id:56, name:'Thanh Tùng',       district:'Đầm Dơi', type:'Xã',       icon:'🌾', temp:31, hi:34, lo:26, rain:66, humidity:80, wind:18, aqi:47, desc:'Nắng nhẹ', features:['Gió mạnh','Tiềm năng phong điện'],          alert:null, note:'Vùng ven biển gió mạnh. Đang nghiên cứu phát triển điện gió.' },
   { id:57, name:'Ngọc Chánh',       district:'Đầm Dơi', type:'Xã',       icon:'🌿', temp:30, hi:33, lo:25, rain:72, humidity:85, wind:15, aqi:42, desc:'Mưa nhẹ',  features:['Nông nghiệp','Kênh Đầm Dơi'],               alert:null, note:'Địa hình bằng phẳng, nhiều kênh đào. Sản xuất thủy sản quy mô lớn.' },
   { id:58, name:'Tân Trung',        district:'Đầm Dơi', type:'Xã',       icon:'🌾', temp:31, hi:34, lo:26, rain:68, humidity:82, wind:16, aqi:44, desc:'Có mây',   features:['Tôm','Lúa','Cá nước ngọt'],                 alert:null, note:'Đa dạng mô hình sản xuất. Có ao nuôi cá nước ngọt trong vùng ngọt hóa.' },
@@ -225,6 +225,81 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+// ── ENHANCED PARTICLE SYSTEM ──
+class WeatherParticles {
+  constructor(canvasId, type = 'rain') {
+    this.canvas = $(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.type = type;
+    this.particles = [];
+    this.resize();
+    this.animate();
+    window.addEventListener('resize', () => this.resize());
+  }
+  
+  resize() {
+    this.canvas.width = this.canvas.offsetWidth * window.devicePixelRatio;
+    this.canvas.height = this.canvas.offsetHeight * window.devicePixelRatio;
+    this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    this.w = this.canvas.offsetWidth;
+    this.h = this.canvas.offsetHeight;
+  }
+  
+  createParticles() {
+    this.particles = [];
+    const count = this.w / 4;
+    for (let i = 0; i < count; i++) {
+      this.particles.push({
+        x: Math.random() * this.w,
+        y: Math.random() * -this.h,
+        vy: Math.random() * 3 + 1,
+        vx: Math.random() * 1 - 0.5,
+        size: Math.random() * 2 + 1,
+        opacity: Math.random() * 0.5 + 0.3,
+        sway: Math.random() * 0.02 + 0.01
+      });
+    }
+  }
+  
+  animate() {
+    this.ctx.clearRect(0, 0, this.w, this.h);
+    
+    this.particles.forEach(p => {
+      p.y += p.vy;
+      p.x += p.vx + Math.sin(p.y * p.sway) * 0.5;
+      p.opacity *= 0.995;
+      
+      if (p.y > this.h || p.opacity < 0.05) {
+        p.y = Math.random() * -50;
+        p.x = Math.random() * this.w;
+        p.opacity = Math.random() * 0.5 + 0.3;
+      }
+      
+      this.ctx.save();
+      this.ctx.globalAlpha = p.opacity;
+      this.ctx.strokeStyle = this.type === 'rain' ? '#60a5fa' : '#94a3b8';
+      this.ctx.lineWidth = p.size;
+      this.ctx.lineCap = 'round';
+      this.ctx.beginPath();
+      this.ctx.moveTo(p.x, p.y);
+      this.ctx.lineTo(p.x + 2, p.y + 8);
+      this.ctx.stroke();
+      this.ctx.restore();
+    });
+    
+    requestAnimationFrame(() => this.animate());
+  }
+}
+
+// Init particles after DOM
+let rainParticles, cloudParticles;
+function initParticles() {
+  if (STATE.selectedWard?.rain > 50) {
+    rainParticles = new WeatherParticles('particleCanvasRain', 'rain');
+  }
+  cloudParticles = new WeatherParticles('particleCanvasClouds', 'cloud');
+}
+
 // ── INIT STARS & CLOUDS ──
 (function initSky() {
   const c = $('stars');
@@ -238,7 +313,6 @@ function showToast(msg) {
   [{w:200,h:40,top:'8%',op:.6,dur:90},{w:130,h:28,top:'15%',op:.4,dur:70},{w:280,h:50,top:'20%',op:.3,dur:120},{w:160,h:35,top:'5%',op:.5,dur:80}].forEach(cfg => {
     const d = document.createElement('div'); d.className = 'cloud';
     d.style.cssText = `width:${cfg.w}px;height:${cfg.h}px;top:${cfg.top};left:-${cfg.w+50}px;opacity:${cfg.op};--cd:${cfg.dur}s;animation-delay:${Math.random()*-cfg.dur}s;`;
-    ['top:-','left:'].forEach(() => {}); // blobs
     const b = document.createElement('div');
     b.style.cssText = `position:absolute;top:-${cfg.h*.4}px;left:${cfg.w*.2}px;width:${cfg.h*1.5}px;height:${cfg.h*1.5}px;border-radius:50%;background:rgba(255,255,255,0.09);filter:blur(1px)`;
     d.appendChild(b);
@@ -251,6 +325,7 @@ function showToast(msg) {
     $('mainOrb').style.boxShadow = '0 0 40px 15px rgba(148,163,184,0.2)';
   }
 })();
+
 
 // ── UPDATE TIME ──
 function updateClock() {
@@ -334,11 +409,11 @@ function computeDistrictStats() {
       stats[w.district] = {count: 0, temp: 0, rain: 0, humidity: 0, wind: 0, aqi: 0};
     }
     stats[w.district].count++;
-    stats[w.district].temp += w.temp;
-    stats[w.district].rain += w.rain;
-    stats[w.district].humidity += w.humidity;
-    stats[w.district].wind += w.wind;
-    stats[w.district].aqi += w.aqi;
+    stats[w.district].temp += Number(w.temp) || 0;
+    stats[w.district].rain += Number(w.rain) || 0;
+    stats[w.district].humidity += Number(w.humidity) || 0;
+    stats[w.district].wind += Number(w.wind) || 0;
+    stats[w.district].aqi += Number(w.aqi) || 0;
   });
   Object.keys(stats).forEach(d => {
     const s = stats[d];
@@ -484,7 +559,332 @@ function renderRainDistrictChart() {
   });
 }
 
+// ── EXTRA DASHBOARD CHARTS ──
+function renderAQIPieChart() {
+  const canvas = $('aqiPieChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 200, H = canvas.offsetHeight || 200;
+  canvas.width = W * 2; canvas.height = H * 2; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.scale(2, 2);
+  ctx.clearRect(0, 0, W, H);
+
+  const buckets = [
+    { label: 'Tốt', max: 50, color: '#22c55e', count: 0 },
+    { label: 'TB', max: 100, color: '#eab308', count: 0 },
+    { label: 'Cao', max: 150, color: '#f97316', count: 0 },
+    { label: 'Xấu', max: 500, color: '#ef4444', count: 0 },
+  ];
+  WARDS.forEach(w => {
+    const bucket = buckets.find(b => w.aqi <= b.max) || buckets[buckets.length - 1];
+    bucket.count++;
+  });
+  const total = buckets.reduce((s, b) => s + b.count, 0) || 1;
+  let start = -Math.PI / 2;
+  const radius = Math.min(W, H) / 2 - 10;
+
+  buckets.forEach(b => {
+    const angle = (b.count / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(W / 2, H / 2);
+    ctx.arc(W / 2, H / 2, radius, start, start + angle);
+    ctx.closePath();
+    ctx.fillStyle = b.color;
+    ctx.fill();
+    start += angle;
+  });
+
+  // Donut hole
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.arc(W / 2, H / 2, radius * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'var(--text)';
+  ctx.font = '14px Be Vietnam Pro';
+  ctx.textAlign = 'center';
+  ctx.fillText('AQI', W / 2, H / 2 - 6);
+  ctx.font = '12px Be Vietnam Pro';
+  ctx.fillText(`${total} vùng`, W / 2, H / 2 + 12);
+}
+
+function renderTempAreaChart() {
+  const canvas = $('tempAreaChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 300, H = canvas.offsetHeight || 150;
+  canvas.width = W * 2; canvas.height = H * 2; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.scale(2, 2);
+  ctx.clearRect(0, 0, W, H);
+
+  const stats = computeDistrictStats();
+  const items = Object.entries(stats)
+    .sort((a, b) => b[1].avgTemp - a[1].avgTemp)
+    .slice(0, 8);
+  const temps = items.map(([, v]) => dispTemp(v.avgTemp));
+  const maxT = Math.max(...temps);
+  const minT = Math.min(...temps);
+  const span = Math.max(1, maxT - minT);
+  const step = items.length > 1 ? (W - 60) / (items.length - 1) : 0;
+
+  // Area fill
+  ctx.beginPath();
+  items.forEach(([d, v], i) => {
+    const x = 30 + i * step;
+    const y = H - 30 - ((dispTemp(v.avgTemp) - minT) / span) * (H - 60);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(W - 30, H - 30);
+  ctx.lineTo(30, H - 30);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 20, 0, H - 20);
+  grad.addColorStop(0, 'rgba(251,146,60,0.35)');
+  grad.addColorStop(1, 'rgba(56,189,248,0.08)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line stroke
+  ctx.beginPath();
+  items.forEach(([d, v], i) => {
+    const x = 30 + i * step;
+    const y = H - 30 - ((dispTemp(v.avgTemp) - minT) / span) * (H - 60);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#fb923c';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Dots + labels
+  ctx.fillStyle = 'var(--text)';
+  ctx.font = '10px Be Vietnam Pro';
+  ctx.textAlign = 'center';
+  items.forEach(([d, v], i) => {
+    const x = 30 + i * step;
+    const y = H - 30 - ((dispTemp(v.avgTemp) - minT) / span) * (H - 60);
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fb923c';
+    ctx.fill();
+    ctx.fillStyle = 'var(--muted)';
+    ctx.fillText(d.slice(0, 10), x, H - 12);
+  });
+}
+
+function renderDoubleBarChart() {
+  const canvas = $('doubleBarChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 360, H = canvas.offsetHeight || 200;
+  canvas.width = W * 2; canvas.height = H * 2; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.scale(2, 2);
+  ctx.clearRect(0, 0, W, H);
+
+  const stats = computeDistrictStats();
+  const items = Object.entries(stats)
+    .sort((a, b) => b[1].avgRain - a[1].avgRain)
+    .slice(0, 6);
+  const maxVal = Math.max(
+    ...items.map(([, v]) => Math.max(v.avgRain, v.avgWind))
+  );
+  const bw = (W - 60) / items.length;
+  const scale = (H - 50) / maxVal;
+
+  items.forEach(([d, v], i) => {
+    const x = 30 + i * bw;
+    const rainH = v.avgRain * scale;
+    const windH = v.avgWind * scale;
+
+    // Rain bar
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(x + 4, H - 30 - rainH, bw / 2 - 8, rainH);
+    // Wind bar
+    ctx.fillStyle = '#a855f7';
+    ctx.fillRect(x + bw / 2 + 4, H - 30 - windH, bw / 2 - 8, windH);
+
+    ctx.fillStyle = 'var(--muted)';
+    ctx.font = '10px Be Vietnam Pro';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.slice(0, 10), x + bw / 2, H - 10);
+  });
+}
+
+function renderComboChart() {
+  const canvas = $('comboChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 360, H = canvas.offsetHeight || 200;
+  canvas.width = W * 2; canvas.height = H * 2; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.scale(2, 2);
+  ctx.clearRect(0, 0, W, H);
+
+  const data = FORECAST.slice(0, 7);
+  const maxRain = Math.max(...data.map(d => d.rain));
+  const maxTemp = Math.max(...data.map(d => dispTemp(d.hi)));
+  const bw = (W - 60) / data.length;
+  const rainScale = (H - 50) / maxRain;
+  const tempScale = (H - 60) / maxTemp;
+
+  // Bars (rain)
+  data.forEach((d, i) => {
+    const x = 30 + i * bw;
+    const h = d.rain * rainScale;
+    ctx.fillStyle = 'rgba(56,189,248,0.5)';
+    ctx.fillRect(x + 6, H - 30 - h, bw - 12, h);
+    ctx.fillStyle = 'var(--muted)';
+    ctx.font = '10px Be Vietnam Pro';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.date, x + bw / 2, H - 10);
+  });
+
+  // Line (hi temp)
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const x = 30 + i * bw + bw / 2;
+    const y = H - 30 - dispTemp(d.hi) * tempScale;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#fb923c';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  data.forEach((d, i) => {
+    const x = 30 + i * bw + bw / 2;
+    const y = H - 30 - dispTemp(d.hi) * tempScale;
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fb923c';
+    ctx.fill();
+  });
+}
+
+function renderDashboard() {
+  renderDistrictTable();
+  renderTopRainTable();
+  renderRainDistrictChart();
+  renderAQIPieChart();
+  renderTempAreaChart();
+  renderDoubleBarChart();
+  renderComboChart();
+}
+
 // ── RENDER TEMPERATURE CHART ──
+function renderChart(animate = true) {
+  const canvas = $('tempChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 800, H = 120;
+  canvas.width = W * window.devicePixelRatio;
+  canvas.height = H * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  
+  const temps = HOURS.map(h => dispTemp(h.temp));
+  const minV = Math.min(...temps) - 2, maxV = Math.max(...temps) + 2;
+  const px = (i) => (i / (HOURS.length - 1)) * (W - 40) + 20;
+  const py = (v) => H - 20 - ((v - minV) / (maxV - minV)) * (H - 35);
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  if (!animate) {
+    // Static render (fast)
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, 'rgba(56,189,248,0.3)');
+    grad.addColorStop(1, 'rgba(56,189,248,0)');
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(temps[0]));
+    for (let i = 1; i < temps.length; i++) {
+      const cpx = (px(i - 1) + px(i)) / 2;
+      ctx.bezierCurveTo(cpx, py(temps[i-1]), cpx, py(temps[i]), px(i), py(temps[i]));
+    }
+    ctx.lineTo(px(temps.length - 1), H);
+    ctx.lineTo(px(0), H);
+    ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+    
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(temps[0]));
+    for (let i = 1; i < temps.length; i++) {
+      const cpx = (px(i - 1) + px(i)) / 2;
+      ctx.bezierCurveTo(cpx, py(temps[i-1]), cpx, py(temps[i]), px(i), py(temps[i]));
+    }
+    ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5; ctx.stroke();
+    
+    // dots
+    HOURS.forEach((h, i) => {
+      const x = px(i), y = py(temps[i]);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#fb923c' : '#38bdf8'; ctx.fill();
+    });
+    return;
+  }
+  
+  // Animated render
+  let progress = 0;
+  const duration = 1500;
+  const start = performance.now();
+  
+  function animateChart(timestamp) {
+    const elapsed = timestamp - start;
+    const p = Math.min(elapsed / duration, 1);
+    progress = 1 - Math.pow(1 - p, 3);
+    
+    ctx.clearRect(0, 0, W, H);
+    
+    // Animated fill (partial path)
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, `rgba(56,189,248,${0.3*progress})`);
+    grad.addColorStop(1, `rgba(56,189,248,0)`);
+    
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(temps[0]));
+    const steps = Math.floor(temps.length * progress);
+    for (let i = 1; i <= steps; i++) {
+      const cpx = (px(i - 1) + px(i)) / 2;
+      ctx.bezierCurveTo(cpx, py(temps[i-1]), cpx, py(temps[i]), px(i), py(temps[i]));
+    }
+    if (steps < temps.length) {
+      ctx.lineTo(px(steps), H);
+    } else {
+      ctx.lineTo(px(temps.length - 1), H);
+      ctx.lineTo(px(0), H);
+    }
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+    
+    // Animated line
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(temps[0]));
+    for (let i = 1; i <= steps; i++) {
+      const cpx = (px(i - 1) + px(i)) / 2;
+      ctx.bezierCurveTo(cpx, py(temps[i-1]), cpx, py(temps[i]), px(i), py(temps[i]));
+    }
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    
+    // Animated dots (fade in)
+    HOURS.slice(0, steps + 1).forEach((h, i) => {
+      const x = px(i), y = py(temps[i]);
+      const dotProgress = Math.min(i / temps.length + progress * 0.3, 1);
+      ctx.save();
+      ctx.globalAlpha = dotProgress;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#fb923c' : '#38bdf8';
+      ctx.fill();
+      ctx.restore();
+    });
+    
+    if (progress < 1) {
+      requestAnimationFrame(animateChart);
+    }
+  }
+  requestAnimationFrame(animateChart);
+}
 function renderChart() {
   const canvas = $('tempChart');
   if (!canvas) return;
@@ -541,7 +941,7 @@ function renderWardsGrid(filter = 'all', search = '') {
     const searchOk = !search || w.name.toLowerCase().includes(search.toLowerCase()) || w.district.toLowerCase().includes(search.toLowerCase());
     return distOk && searchOk;
   });
-  $('wardsCount') && ($('wardsCount').textContent = `Hiển thị ${filtered.length} / ${WARDS.length} địa phương`);
+$('wardsCount') && ($('wardsCount').textContent = `Hiển thị ${filtered.length} / ${WARDS.length} địa phương`);
   filtered.forEach(w => {
     const card = document.createElement('div'); card.className = 'ward-card';
     card.innerHTML = `
@@ -626,10 +1026,35 @@ function selectWard(w) {
   showToast(`✅ Đã chọn: ${w.name}`);
 }
 
+function animateCountUp(el, target, duration = 1200) {
+  const start = parseFloat(el.textContent) || 0;
+  const range = target - start;
+  const startTime = performance.now();
+  
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const easeProgress = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    const current = Math.round(start + range * easeProgress);
+    el.textContent = current;
+    
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 function updateTempDisplay(temp, hi, lo) {
-  $('currentTemp').innerHTML = `${dispTemp(temp)}<sup id="tempUnitLabel">${unitSuffix()}</sup>`;
-  $('hiTemp').textContent = dispTemp(hi);
-  $('loTemp').textContent = dispTemp(lo);
+  const cTemp = $('currentTemp');
+  const hTemp = $('hiTemp');
+  const lTemp = $('loTemp');
+  
+  cTemp.innerHTML = `${dispTemp(temp)}<sup id="tempUnitLabel">${unitSuffix()}</sup>`;
+  animateCountUp(hTemp, dispTemp(hi));
+  animateCountUp(lTemp, dispTemp(lo));
+  
+  // Animate main temp if count-up class
+  const mainNum = $('currentTemp').querySelector('.count-up');
+  if (mainNum) animateCountUp(mainNum, dispTemp(temp));
 }
 
 // ── RENDER SEARCH RESULTS (overlay) ──
@@ -656,8 +1081,18 @@ function renderSearchResults(filter = 'all', query = '') {
         <span class="sr-rain">💧${w.rain}%</span>
       </div>`;
     item.addEventListener('click', () => {
-      selectWard(w);
-      closeSearch();
+      if (STATE.comparePicking) {
+        STATE['compare' + STATE.comparePicking] = w;
+        const slot = STATE.comparePicking;
+        STATE.comparePicking = null;
+        closeSearch();
+        renderCompareCard(slot, w);
+        if (STATE.compareA && STATE.compareB) buildCompareTable();
+        showToast(`✅ Đã chọn ${w.name} cho vùng ${slot}`);
+      } else {
+        selectWard(w);
+        closeSearch();
+      }
     });
     list.appendChild(item);
   });
@@ -671,7 +1106,7 @@ $('searchClose').addEventListener('click', closeSearch);
 $('searchOverlay').addEventListener('click', e => { if (e.target === $('searchOverlay')) closeSearch(); });
 
 let searchD = 'all';
-$('districtTabs').addEventListener('click', e => {
+  $('districtTabs').addEventListener('click', e => {
   const btn = e.target.closest('.dtab');
   if (!btn) return;
   document.querySelectorAll('.dtab').forEach(b => b.classList.remove('active'));
@@ -820,22 +1255,7 @@ function renderSearchResults2(filter, query) {
   });
 }
 
-// Override functions
-window._renderSearch = renderSearchResults2;
-$('districtTabs').removeEventListener && null;
-$('searchInput').removeEventListener && null;
-// Re-bind with updated function
-$('districtTabs').addEventListener('click', e => {
-  const btn = e.target.closest('.dtab');
-  if (!btn) return;
-  document.querySelectorAll('.dtab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  searchD = btn.dataset.d;
-  renderSearchResults2(searchD, $('searchInput').value);
-});
-$('searchInput').addEventListener('input', e => renderSearchResults2(searchD, e.target.value));
-$('searchBtn').removeEventListener('click', openSearch);
-$('searchBtn').addEventListener('click', () => { STATE.comparePicking = null; openSearch(); renderSearchResults2('all',''); });
+
 
 // ── UNIT TOGGLE ──
 $('unitToggle').addEventListener('click', () => {
@@ -844,6 +1264,7 @@ $('unitToggle').addEventListener('click', () => {
   renderHourly();
   renderForecastHome();
   renderChart();
+  renderDashboard();
   if ($('tab-forecast').classList.contains('active')) renderForecastFull();
   if ($('tab-wards').classList.contains('active')) renderWardsGrid(wardFilterD, $('wardSearch').value);
   const w = STATE.selectedWard || {temp:32,hi:35,lo:27};
@@ -870,6 +1291,7 @@ $('refreshBtn').addEventListener('click', function() {
     renderHourly();
     renderForecastHome();
     renderChart();
+    renderDashboard();
     showToast('✅ Đã cập nhật dữ liệu!');
   }, 1200);
 });
@@ -896,7 +1318,23 @@ document.querySelectorAll('.tilt').forEach(el => {
 // ── INIT RENDER ──
 renderHourly();
 renderForecastHome();
+renderDashboard();
 setTimeout(renderChart, 300);
 
 // Resize chart on window resize
-window.addEventListener('resize', () => renderChart());
+// Canvas resize observer
+const resizeObserver = new ResizeObserver(() => {
+  renderChart();
+  renderRainDistrictChart();
+  renderAQIPieChart();
+  renderTempAreaChart();
+  renderDoubleBarChart();
+  renderComboChart();
+});
+document.querySelectorAll('canvas').forEach(canvas => resizeObserver.observe(canvas));
+
+window.addEventListener('resize', () => { 
+  renderChart(); 
+  renderDashboard(); 
+});
+
