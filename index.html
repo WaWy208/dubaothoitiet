@@ -1,9 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Thời Tiết Cà Mau</title>
+<title>Thời Tiết Cà Mau Mới (Cà Mau + Bạc Liêu cũ) — Dự báo chuyên nghiệp</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
@@ -15,8 +15,53 @@
 <div class="sky-bg" id="skyBg">
   <div class="stars" id="stars"></div>
   <div class="clouds-layer" id="clouds"></div>
-  <div class="orb-wrap"><div class="orb"></div><div class="orb-ring"></div></div>
+  <div class="orb-wrap"><div class="orb" id="mainOrb"></div><div class="orb-ring"></div></div>
 </div>
+
+<!-- Search Overlay -->
+<div class="search-overlay" id="searchOverlay">
+  <div class="search-box">
+    <div class="search-header">
+<span class="search-title">📍 Chọn xã/phường Cà Mau Mới (Cà Mau + Bạc Liêu cũ)</span>
+      <button class="search-close" id="searchClose">✕</button>
+    </div>
+    <div class="search-input-wrap">
+      <span class="si-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Tìm xã, phường, thị trấn..." autocomplete="off"/>
+    </div>
+    <div class="district-tabs" id="districtTabs">
+      <button class="dtab active" data-d="all">Tất cả</button>
+      <button class="dtab" data-d="TP. Cà Mau">TP. Cà Mau</button>
+      <button class="dtab" data-d="U Minh">U Minh</button>
+      <button class="dtab" data-d="Thới Bình">Thới Bình</button>
+      <button class="dtab" data-d="Trần Văn Thời">Trần Văn Thời</button>
+      <button class="dtab" data-d="Cái Nước">Cái Nước</button>
+      <button class="dtab" data-d="Đầm Dơi">Đầm Dơi</button>
+      <button class="dtab" data-d="Năm Căn">Năm Căn</button>
+      <button class="dtab" data-d="Phú Tân">Phú Tân</button>
+      <button class="dtab" data-d="Ngọc Hiển">Ngọc Hiển</button>
+      <button class="dtab" data-d="Bạc Liêu (cũ)">Bạc Liêu (cũ)</button>
+    </div>
+    <div class="search-results-list" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- Ward Detail Modal -->
+<div class="ward-modal" id="wardModal">
+  <div class="ward-modal-box">
+    <div class="wm-header">
+      <div>
+        <div class="wm-name" id="wmName"></div>
+        <div class="wm-sub" id="wmSub"></div>
+      </div>
+      <button class="wm-close" id="wmClose">✕</button>
+    </div>
+    <div class="wm-body" id="wmBody"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <!-- Main App -->
 <div class="app">
@@ -26,265 +71,315 @@
     <div class="logo">
       <div class="logo-icon">🌤️</div>
       <div>
-        <div class="logo-text">Cà Mau Weather</div>
-        <div class="logo-sub">Dự báo khí tượng</div>
+<div class="logo-text">Cà Mau Mới Weather</div>
+        <div class="logo-sub" id="currentLocSub">Dự báo khí tượng</div>
       </div>
     </div>
     <div class="header-right">
+      <button class="hdr-btn" id="searchBtn" title="Chọn xã/phường">📍</button>
+      <button class="hdr-btn unit-toggle" id="unitToggle">°C</button>
+      <button class="hdr-btn" id="themeBtn">🌙</button>
       <div class="update-badge">
         <div class="pulse-dot"></div>
-        Cập nhật: 07:30
+        <span id="updateTime">--:--</span>
       </div>
     </div>
   </header>
 
-  <!-- Alert -->
-  <div class="alert-bar fade-up d1">
-    <div class="alert-icon">⚠️</div>
-    <div class="alert-text">
-      <div class="alert-title">Khuyến cáo: Gió mùa Tây Nam</div>
-      <div class="alert-desc">Mưa vừa đến mưa to, sóng biển cao 1.5 – 2m. Ngư dân cần thận trọng khi ra khơi.</div>
-    </div>
+  <!-- Desktop Tab Nav -->
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="home">🏠 Tổng quan</button>
+    <button class="tab-btn" data-tab="forecast">📅 7 ngày</button>
+    <button class="tab-btn" data-tab="wards">🗺️ 64 Xã/Phường</button>
+    <button class="tab-btn" data-tab="compare">⚖️ So sánh vùng</button>
   </div>
 
-  <!-- Hero -->
-  <div class="hero fade-up d2">
-    <div>
-      <div class="location">📍 Thành phố Cà Mau · Cực Nam Tổ Quốc</div>
-      <div class="city">Cà Mau</div>
-      <div class="province">Tỉnh Cà Mau, Việt Nam</div>
-      <div class="current-temp">32<sup>°C</sup></div>
-      <div style="font-size:15px;color:var(--muted);margin-top:4px;">Có mây, mưa rải rác — Cảm giác như 36°C</div>
-    </div>
-    <div class="hero-right">
-      <span class="weather-icon-3d" id="mainIcon">🌦️</span>
-      <div class="weather-desc" id="mainDesc">Có mây</div>
-    </div>
-  </div>
+  <!-- ══ TAB HOME ══ -->
+  <div class="tab-content active" id="tab-home">
 
-  <!-- Stats Row -->
-  <div class="stats-row fade-up d3">
-    <div class="stat-card tooltip-wrap tilt">
-      <span class="stat-icon">💧</span>
-      <span class="stat-val">82%</span>
-      <span class="stat-lbl">Độ ẩm</span>
-      <div class="tooltip">Độ ẩm tương đối trung bình</div>
+    <div class="alert-bar fade-up d1" id="alertBar">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-text">
+        <div class="alert-title">Khuyến cáo: Gió mùa Tây Nam</div>
+        <div class="alert-desc">Mưa vừa đến mưa to, sóng biển cao 1.5–2m. Ngư dân cần thận trọng khi ra khơi.</div>
+      </div>
+      <button class="alert-close-btn" id="alertClose">✕</button>
     </div>
-    <div class="stat-card tooltip-wrap tilt">
-      <span class="stat-icon">🌬️</span>
-      <span class="stat-val">18 km/h</span>
-      <span class="stat-lbl">Gió ĐN</span>
-      <div class="tooltip">Hướng: Đông Nam, cấp 3</div>
+
+    <div class="hero fade-up d2">
+      <div class="hero-left">
+        <div class="location" id="heroLocation">📍 Thành phố Cà Mau · Cực Nam Tổ Quốc</div>
+        <div class="city" id="heroCity">Cà Mau</div>
+        <div class="province" id="heroProvince">Tỉnh Cà Mau, Việt Nam</div>
+        <div class="current-temp" id="currentTemp">32<sup id="tempUnitLabel">°C</sup></div>
+        <div class="feels-row" id="feelsLike">Có mây, mưa rải rác — Cảm giác như 36°C</div>
+        <div class="hi-lo-row">
+          <span class="hi-badge">↑ <span id="hiTemp">35</span>°</span>
+          <span class="lo-badge">↓ <span id="loTemp">27</span>°</span>
+        </div>
+      </div>
+      <div class="hero-right">
+        <span class="weather-icon-3d" id="mainIcon">🌦️</span>
+        <div class="weather-desc" id="mainDesc">Có mây</div>
+        <button class="refresh-btn" id="refreshBtn">↻ Làm mới</button>
+      </div>
     </div>
-    <div class="stat-card tooltip-wrap tilt">
-      <span class="stat-icon">👁️</span>
-      <span class="stat-val">8 km</span>
-      <span class="stat-lbl">Tầm nhìn</span>
-      <div class="tooltip">Tầm nhìn xa tốt</div>
+
+    <div class="stats-row fade-up d3">
+      <div class="stat-card tooltip-wrap tilt">
+        <span class="stat-icon">💧</span>
+        <span class="stat-val" id="sHumidity">82%</span>
+        <span class="stat-lbl">Độ ẩm</span>
+        <div class="tooltip">Độ ẩm tương đối trung bình</div>
+      </div>
+      <div class="stat-card tooltip-wrap tilt">
+        <span class="stat-icon">🌬️</span>
+        <span class="stat-val" id="sWind">18 km/h</span>
+        <span class="stat-lbl">Gió ĐN</span>
+        <div class="tooltip">Hướng: Đông Nam, cấp 3</div>
+      </div>
+      <div class="stat-card tooltip-wrap tilt">
+        <span class="stat-icon">👁️</span>
+        <span class="stat-val">8 km</span>
+        <span class="stat-lbl">Tầm nhìn</span>
+        <div class="tooltip">Tầm nhìn xa tốt</div>
+      </div>
+      <div class="stat-card tooltip-wrap tilt">
+        <span class="stat-icon">🌡️</span>
+        <span class="stat-val">1010 hPa</span>
+        <span class="stat-lbl">Áp suất</span>
+        <div class="tooltip">Áp suất khí quyển ổn định</div>
+      </div>
     </div>
-    <div class="stat-card tooltip-wrap tilt">
-      <span class="stat-icon">🌡️</span>
-      <span class="stat-val">1010 hPa</span>
-      <span class="stat-lbl">Áp suất</span>
-      <div class="tooltip">Áp suất khí quyển ổn định</div>
-    </div>
-  </div>
 
-  <!-- Hourly -->
-  <div class="section-title fade-up d3">Dự báo theo giờ</div>
-  <div class="hourly-scroll fade-up d4">
-    <div class="hourly-track" id="hourlyTrack"></div>
-  </div>
-
-  <!-- 7-Day Forecast -->
-  <div class="section-title fade-up d4">Dự báo 7 ngày tới</div>
-  <div class="forecast-list fade-up d4" id="forecastList"></div>
-
-  <!-- Detail Grid -->
-  <div class="section-title fade-up d5">Chi tiết thời tiết</div>
-  <div class="detail-grid fade-up d5">
-
-    <!-- UV Index -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Chỉ số UV</div>
-        <div class="dc-val" style="color:#f97316;">7</div>
-        <div class="dc-sub">Cao — Cần bôi kem chống nắng</div>
-        <div class="gauge-wrap">
-          <div class="gauge-bg"></div>
-          <div class="gauge-fill" style="--gauge-rot:70deg;"></div>
+    <!-- DASHBOARD -->
+    <div class="dashboard fade-up d4" id="dashboard">
+      <div class="section-title">📊 Dashboard tổng hợp</div>
+      <div class="dash-grid">
+        <div class="dash-table-wrap">
+          <div class="dash-title">Trung bình theo quận/huyện</div>
+          <table class="dash-table" id="districtAvgTable">
+            <thead><tr><th>Huyện</th><th>Nhiệt °</th><th>Mưa %</th><th>Độ ẩm %</th><th>Gió km/h</th><th>AQI</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="dash-chart-wrap">
+          <div class="dash-title">Top 10 mưa nhất</div>
+          <table class="dash-table compact" id="topRainTable">
+            <thead><tr><th>Xã</th><th>Mưa %</th><th>Nhiệt °</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <canvas id="rainDistrictChart" width="400" height="200"></canvas>
+        <!-- NEW CHARTS -->
+        <div class="dash-chart-wrap">
+          <div class="dash-title">Pie AQI Distribution</div>
+          <canvas id="aqiPieChart" width="200" height="200"></canvas>
+        </div>
+        <div class="dash-chart-wrap">
+          <div class="dash-title">Area Temp Trend</div>
+          <canvas id="tempAreaChart" width="300" height="150"></canvas>
+        </div>
+        <div class="dash-chart-wrap">
+          <div class="dash-title">Double Bar: Rain vs Wind</div>
+          <canvas id="doubleBarChart" width="400" height="200"></canvas>
+        </div>
+        <div class="dash-chart-wrap">
+          <div class="dash-title">Combo Column/Line</div>
+          <canvas id="comboChart" width="400" height="200"></canvas>
         </div>
       </div>
     </div>
 
-    <!-- Wind -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Hướng gió</div>
-        <div class="compass-wrap">
-          <div class="compass">
-            <div class="compass-needle" style="--wind-deg:135deg;"></div>
-            <div class="compass-dirs">
-              <span class="cd-n">B</span><span class="cd-s">N</span>
-              <span class="cd-e">Đ</span><span class="cd-w">T</span>
+    <div class="section-title fade-up d3">⏰ Dự báo theo giờ</div>
+    <div class="hourly-scroll fade-up d4">
+      <div class="hourly-track" id="hourlyTrack"></div>
+    </div>
+
+    <div class="section-title fade-up d4">📈 Biểu đồ nhiệt độ hôm nay</div>
+    <div class="chart-wrap fade-up d4">
+      <canvas id="tempChart" width="800" height="120"></canvas>
+    </div>
+
+    <div class="section-title fade-up d4">📅 Dự báo 7 ngày tới</div>
+    <div class="forecast-list fade-up d4" id="forecastList"></div>
+
+    <div class="section-title fade-up d5">🔬 Chi tiết thời tiết</div>
+    <div class="detail-grid fade-up d5">
+      <div class="detail-card perspective-wrap">
+        <div class="card-3d">
+          <div class="dc-title">Chỉ số UV</div>
+          <div class="dc-val" style="color:#f97316;">7</div>
+          <div class="dc-sub">Cao — Cần bôi kem chống nắng</div>
+          <div class="gauge-wrap"><div class="gauge-bg"></div><div class="gauge-fill" style="--gauge-rot:70deg;"></div></div>
+        </div>
+      </div>
+      <div class="detail-card perspective-wrap">
+        <div class="card-3d">
+          <div class="dc-title">Hướng gió</div>
+          <div class="compass-wrap">
+            <div class="compass">
+              <div class="compass-needle" style="--wind-deg:135deg;"></div>
+              <div class="compass-dirs">
+                <span class="cd-n">B</span><span class="cd-s">N</span>
+                <span class="cd-e">Đ</span><span class="cd-w">T</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:18px;font-weight:700;">18 km/h</div>
+              <div style="font-size:12px;color:var(--muted);">Đông Nam (ĐN)</div>
+              <div style="font-size:12px;color:var(--muted);">Giật: 28 km/h</div>
             </div>
           </div>
-          <div>
-            <div style="font-size:18px;font-weight:700;">18 km/h</div>
-            <div style="font-size:12px;color:var(--muted);">Đông Nam (ĐN)</div>
-            <div style="font-size:12px;color:var(--muted);">Giật: 28 km/h</div>
-          </div>
         </div>
       </div>
-    </div>
-
-    <!-- Air Quality -->
-    <div class="detail-card wide perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Chất lượng không khí (AQI)</div>
-        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-          <div>
-            <div class="dc-val" style="color:#22c55e;">52</div>
-            <div class="dc-sub">Trung bình — Tốt cho hầu hết mọi người</div>
-          </div>
-          <div style="flex:1;min-width:160px;">
-            <div class="aqi-bar"><div class="aqi-marker" style="--aqi-pct:24%;"></div></div>
-            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);">
-              <span>Tốt</span><span>TB</span><span>Cao</span><span>Xấu</span><span>Nguy hiểm</span>
+      <div class="detail-card wide perspective-wrap">
+        <div class="card-3d">
+          <div class="dc-title">Chất lượng không khí (AQI)</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <div><div class="dc-val" style="color:#22c55e;">52</div><div class="dc-sub">Trung bình — Tốt cho hầu hết</div></div>
+            <div style="flex:1;min-width:160px;">
+              <div class="aqi-bar"><div class="aqi-marker" style="--aqi-pct:24%;"></div></div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);"><span>Tốt</span><span>TB</span><span>Cao</span><span>Xấu</span><span>Nguy hiểm</span></div>
             </div>
           </div>
+          <div class="aqi-sub-grid">
+            <div class="aqi-sub"><div class="asv">12 µg/m³</div><div class="asl">PM2.5</div></div>
+            <div class="aqi-sub"><div class="asv">28 µg/m³</div><div class="asl">PM10</div></div>
+            <div class="aqi-sub"><div class="asv">0.03 ppm</div><div class="asl">O₃</div></div>
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;">
-          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:14px;font-weight:600;">12 µg/m³</div>
-            <div style="font-size:10px;color:var(--muted);">PM2.5</div>
+      </div>
+      <div class="detail-card perspective-wrap">
+        <div class="card-3d">
+          <div class="dc-title">Lượng mưa</div>
+          <div class="dc-val" style="color:#93c5fd;">12.4mm</div>
+          <div class="dc-sub">Dự báo hôm nay</div>
+          <div style="margin-top:10px;">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Xác suất mưa: 70%</div>
+            <div class="prog-bar"><div class="prog-fill" style="width:70%;background:linear-gradient(90deg,#38bdf8,#818cf8);"></div></div>
           </div>
-          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:14px;font-weight:600;">28 µg/m³</div>
-            <div style="font-size:10px;color:var(--muted);">PM10</div>
-          </div>
-          <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:14px;font-weight:600;">0.03 ppm</div>
-            <div style="font-size:10px;color:var(--muted);">O₃</div>
+        </div>
+      </div>
+      <div class="detail-card perspective-wrap">
+        <div class="card-3d">
+          <div class="dc-title">Điểm sương & Mây</div>
+          <div class="dc-val">26°C</div>
+          <div class="dc-sub">Điểm sương — khá ẩm</div>
+          <div style="margin-top:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;"><span>Độ che phủ mây</span><span>65%</span></div>
+            <div class="prog-bar"><div class="prog-fill" style="width:65%;background:linear-gradient(90deg,#94a3b8,#e2e8f0);"></div></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Precipitation -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Lượng mưa</div>
-        <div class="dc-val" style="color:#93c5fd;">12.4mm</div>
-        <div class="dc-sub">Dự báo hôm nay</div>
-        <div style="margin-top:10px;display:flex;flex-direction:column;gap:4px;">
-          <div style="font-size:11px;color:var(--muted);">Xác suất mưa: 70%</div>
-          <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:6px;overflow:hidden;">
-            <div style="width:70%;height:100%;background:linear-gradient(90deg,#38bdf8,#818cf8);border-radius:4px;"></div>
-          </div>
+    <div class="section-title fade-up d5">☀️ Mặt trời & Mặt trăng</div>
+    <div class="sun-arc fade-up d5">
+      <div class="sun-card">
+        <svg class="sun-arc-svg" viewBox="0 0 340 110" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#f97316;stop-opacity:1"/>
+              <stop offset="50%" style="stop-color:#fde68a;stop-opacity:1"/>
+              <stop offset="100%" style="stop-color:#f97316;stop-opacity:1"/>
+            </linearGradient>
+          </defs>
+          <line x1="20" y1="100" x2="320" y2="100" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <path d="M 20 100 Q 170 -10 320 100" fill="none" stroke="url(#arcGrad)" stroke-width="2" stroke-dasharray="4 2" opacity=".5"/>
+          <path d="M 20 100 Q 170 -10 320 100" fill="none" stroke="url(#arcGrad)" stroke-width="3" stroke-dasharray="420" stroke-dashoffset="140" stroke-linecap="round"/>
+          <circle cx="220" cy="42" r="12" fill="#fde68a" opacity=".9"/>
+          <circle cx="220" cy="42" r="16" fill="none" stroke="#fde68a" stroke-width="2" opacity=".4"/>
+          <g stroke="#fde68a" stroke-width="1.5" opacity=".6">
+            <line x1="220" y1="22" x2="220" y2="18"/><line x1="220" y1="62" x2="220" y2="66"/>
+            <line x1="200" y1="42" x2="196" y2="42"/><line x1="240" y1="42" x2="244" y2="42"/>
+            <line x1="206" y1="28" x2="203" y2="25"/><line x1="234" y1="56" x2="237" y2="59"/>
+            <line x1="234" y1="28" x2="237" y2="25"/><line x1="206" y1="56" x2="203" y2="59"/>
+          </g>
+          <text x="20" y="98" fill="#f97316" font-size="10" font-family="Be Vietnam Pro,sans-serif" font-weight="600">▲</text>
+          <text x="305" y="98" fill="#f97316" font-size="10" font-family="Be Vietnam Pro,sans-serif" font-weight="600">▼</text>
+        </svg>
+        <div class="sun-labels">
+          <div class="sun-lbl"><div class="sun-lbl-time">05:52</div><div class="sun-lbl-text">🌅 Bình minh</div></div>
+          <div class="sun-lbl"><div class="sun-lbl-time">12h 42m</div><div class="sun-lbl-text">⏱ Ngày dài</div></div>
+          <div class="sun-lbl"><div class="sun-lbl-time">18:34</div><div class="sun-lbl-text">🌇 Hoàng hôn</div></div>
+        </div>
+        <div class="moon-tide-row">
+          <div>🌕 Mặt trăng: <strong>Trăng thượng huyền 68%</strong></div>
+          <div>🌊 Thủy triều: <strong>Lên — 1.4m lúc 14:20</strong></div>
         </div>
       </div>
     </div>
 
-    <!-- Dew Point -->
-    <div class="detail-card perspective-wrap">
-      <div class="card-3d">
-        <div class="dc-title">Điểm sương & Mây</div>
-        <div class="dc-val">26°C</div>
-        <div class="dc-sub">Điểm sương — khá ẩm</div>
-        <div style="margin-top:10px;">
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">
-            <span>Độ che phủ mây</span><span>65%</span>
-          </div>
-          <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:6px;overflow:hidden;">
-            <div style="width:65%;height:100%;background:linear-gradient(90deg,#94a3b8,#e2e8f0);border-radius:4px;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
+    <footer>
+      <div>🛰️ Cà Mau · 9°10'B, 105°9'Đ · Múi giờ GMT+7</div>
+      <div>Dữ liệu: VNMHA — Trung tâm dự báo Khí tượng Thủy văn Cà Mau</div>
+      <div id="footerTime"></div>
+    </footer>
   </div>
 
-  <!-- Sunrise / Sunset -->
-  <div class="section-title fade-up d5">Mặt trời & Mặt trăng</div>
-  <div class="sun-arc fade-up d5">
-    <div class="sun-card">
-      <svg class="sun-arc-svg" viewBox="0 0 340 110" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color:#f97316;stop-opacity:1"/>
-            <stop offset="50%" style="stop-color:#fde68a;stop-opacity:1"/>
-            <stop offset="100%" style="stop-color:#f97316;stop-opacity:1"/>
-          </linearGradient>
-        </defs>
-        <!-- Ground line -->
-        <line x1="20" y1="100" x2="320" y2="100" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
-        <!-- Arc path -->
-        <path d="M 20 100 Q 170 -10 320 100" fill="none" stroke="url(#arcGrad)" stroke-width="2" stroke-dasharray="4 2" opacity=".5"/>
-        <!-- Filled arc progress -->
-        <path d="M 20 100 Q 170 -10 320 100" fill="none" stroke="url(#arcGrad)" stroke-width="3"
-          stroke-dasharray="420" stroke-dashoffset="140" stroke-linecap="round"/>
-        <!-- Sun position -->
-        <circle cx="220" cy="42" r="12" fill="#fde68a" opacity=".9"/>
-        <circle cx="220" cy="42" r="16" fill="none" stroke="#fde68a" stroke-width="2" opacity=".4"/>
-        <!-- Rays -->
-        <g stroke="#fde68a" stroke-width="1.5" opacity=".6">
-          <line x1="220" y1="22" x2="220" y2="18"/>
-          <line x1="220" y1="62" x2="220" y2="66"/>
-          <line x1="200" y1="42" x2="196" y2="42"/>
-          <line x1="240" y1="42" x2="244" y2="42"/>
-          <line x1="206" y1="28" x2="203" y2="25"/>
-          <line x1="234" y1="56" x2="237" y2="59"/>
-          <line x1="234" y1="28" x2="237" y2="25"/>
-          <line x1="206" y1="56" x2="203" y2="59"/>
-        </g>
-        <!-- Sunrise label -->
-        <text x="20" y="98" fill="#f97316" font-size="10" font-family="Be Vietnam Pro,sans-serif" font-weight="600">▲</text>
-        <!-- Sunset label -->
-        <text x="305" y="98" fill="#f97316" font-size="10" font-family="Be Vietnam Pro,sans-serif" font-weight="600">▼</text>
-      </svg>
-      <div class="sun-labels">
-        <div class="sun-lbl">
-          <div class="sun-lbl-time">05:52</div>
-          <div class="sun-lbl-text">🌅 Bình minh</div>
-        </div>
-        <div class="sun-lbl">
-          <div class="sun-lbl-time">12h 42m</div>
-          <div class="sun-lbl-text">⏱ Ngày dài</div>
-        </div>
-        <div class="sun-lbl">
-          <div class="sun-lbl-time">18:34</div>
-          <div class="sun-lbl-text">🌇 Hoàng hôn</div>
-        </div>
-      </div>
-      <div style="margin-top:14px;border-top:1px solid var(--glass-border);padding-top:14px;display:flex;gap:20px;flex-wrap:wrap;">
-        <div><span style="font-size:12px;color:var(--muted);">🌕 Mặt trăng: </span><span style="font-size:13px;font-weight:600;">Trăng thượng huyền 68%</span></div>
-        <div><span style="font-size:12px;color:var(--muted);">🌊 Thủy triều: </span><span style="font-size:13px;font-weight:600;">Lên — 1.4m lúc 14:20</span></div>
-      </div>
-    </div>
+  <!-- ══ TAB FORECAST ══ -->
+  <div class="tab-content" id="tab-forecast">
+    <div class="section-title" style="padding-top:20px;">📅 Dự báo 7 ngày chi tiết</div>
+    <div class="forecast-full" id="forecastFull"></div>
   </div>
 
-  <!-- Footer -->
-  <footer>
-    <div style="margin-bottom:6px;">🛰️ Cà Mau · 9°10'B, 105°9'Đ · Múi giờ GMT+7</div>
-    <div>Dữ liệu khí tượng: VNMHA — Trung tâm dự báo Khí tượng Thủy văn Cà Mau</div>
-    <div style="margin-top:4px;">Cập nhật lúc 07:30 · 27/03/2026</div>
-  </footer>
+  <!-- ══ TAB WARDS ══ -->
+  <div class="tab-content" id="tab-wards">
+    <div class="wards-topbar">
+🗺️ 147 Xã/Phường/Thị trấn — Cà Mau Mới (Cà Mau + Bạc Liêu cũ)
+      <div class="wards-search-wrap">
+        <input type="text" id="wardSearch" placeholder="🔍 Tìm nhanh xã, phường..."/>
+      </div>
+      <div class="district-filter" id="districtFilter">
+        <button class="df-btn active" data-d="all">Tất cả</button>
+        <button class="df-btn" data-d="TP. Cà Mau">TP. Cà Mau</button>
+        <button class="df-btn" data-d="U Minh">U Minh</button>
+        <button class="df-btn" data-d="Thới Bình">Thới Bình</button>
+        <button class="df-btn" data-d="Trần Văn Thời">Trần Văn Thời</button>
+        <button class="df-btn" data-d="Cái Nước">Cái Nước</button>
+        <button class="df-btn" data-d="Đầm Dơi">Đầm Dơi</button>
+        <button class="df-btn" data-d="Năm Căn">Năm Căn</button>
+        <button class="df-btn" data-d="Phú Tân">Phú Tân</button>
+        <button class="df-btn" data-d="Ngọc Hiển">Ngọc Hiển</button>
+        <button class="df-btn" data-d="Bạc Liêu (cũ)">Bạc Liêu (cũ)</button>
+      </div>
+    </div>
+    <div class="wards-count" id="wardsCount"></div>
+    <div class="wards-grid" id="wardsGrid"></div>
+  </div>
 
-</div><!-- end app -->
+  <!-- ══ TAB COMPARE ══ -->
+  <div class="tab-content" id="tab-compare">
+    <div class="section-title" style="padding-top:20px;">⚖️ So sánh thời tiết giữa 2 vùng</div>
+    <div class="compare-wrap">
+      <div class="cp-slot">
+        <div class="cp-label">📍 Vùng A</div>
+        <button class="cp-pick-btn" data-slot="A" id="cpBtnA">+ Chọn xã/phường</button>
+        <div class="cp-card" id="cpCardA"><div class="cp-empty">Chưa chọn vùng</div></div>
+      </div>
+      <div class="cp-vs">VS</div>
+      <div class="cp-slot">
+        <div class="cp-label">📍 Vùng B</div>
+        <button class="cp-pick-btn" data-slot="B" id="cpBtnB">+ Chọn xã/phường</button>
+        <div class="cp-card" id="cpCardB"><div class="cp-empty">Chưa chọn vùng</div></div>
+      </div>
+    </div>
+    <div id="compareResult"></div>
+  </div>
 
-<!-- Bottom Nav (mobile) -->
+</div>
+
+<!-- Bottom Nav mobile -->
 <div class="bottom-nav">
   <div class="bottom-nav-inner">
-    <div class="bn-item active"><span class="bn-icon">🏠</span>Trang chủ</div>
-    <div class="bn-item"><span class="bn-icon">📅</span>7 ngày</div>
-    <div class="bn-item"><span class="bn-icon">🗺️</span>Bản đồ</div>
-    <div class="bn-item"><span class="bn-icon">⚙️</span>Cài đặt</div>
+    <div class="bn-item active" data-tab="home"><span class="bn-icon">🏠</span>Tổng quan</div>
+    <div class="bn-item" data-tab="forecast"><span class="bn-icon">📅</span>7 ngày</div>
+<span class="bn-icon">🗺️</span>147 Vùng</div>
+    <div class="bn-item" data-tab="compare"><span class="bn-icon">⚖️</span>So sánh</div>
   </div>
 </div>
 
 <script src="script.js"></script>
 </body>
 </html>
-
-
