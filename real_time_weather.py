@@ -1,20 +1,3 @@
-"""
-Fetch real-time weather for all wards using OpenWeatherMap (per-ward lat/lon).
-
-Usage:
-  python real_time_weather.py          # fetch all wards from wards_coords.json
-  python real_time_weather.py 55       # fetch only ward with id=55 (debug)
-
-Output (stdout, UTF-8):
-{
-  "status": "ok",
-  "count": 147,
-  "updated": "2026-03-28T16:05:00Z",
-  "data": [{...successful wards...}],
-  "errors": [{...failed wards...}]
-}
-"""
-
 from __future__ import annotations
 
 import json
@@ -27,11 +10,11 @@ from typing import Any, Dict, List
 try:
     import requests
 except ImportError:
-    requests = None  # type: ignore
+    requests = None
 
 OWM_API_KEY = os.getenv("OWM_API_KEY") or "7f318ae139397881686e5acd8dce296c"
 COORD_FILE = "wards_coords.json"
-RATE_SLEEP = 1.2  # seconds between calls to avoid rate limit (≈50 req/min)
+RATE_SLEEP = 1.2
 
 
 def kmh(speed_ms: float) -> float:
@@ -87,7 +70,7 @@ def fetch_point(lat: float, lon: float) -> Dict[str, Any]:
                 "%H:%M UTC"
             ),
         }
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         return {"error": str(e)}
 
 
@@ -108,7 +91,6 @@ def main() -> None:
         print(json.dumps({"status": "error", "message": f"Cannot read {COORD_FILE}: {e}"}, ensure_ascii=False))
         sys.exit(1)
 
-    # Optional: only one ward id passed for quick test
     target_id = sys.argv[1] if len(sys.argv) >= 2 and sys.argv[1].lower() != "all" else None
     if target_id:
         wards = [w for w in wards if str(w.get("id")) == str(target_id)]
@@ -123,7 +105,6 @@ def main() -> None:
         res = fetch_point(float(lat), float(lon))
         res.update({"id": w.get("id"), "name": w.get("name"), "district": w.get("district"), "label": label})
         results.append(res)
-        # Throttle to stay under free tier limits
         if idx < len(wards):
             time.sleep(RATE_SLEEP)
 
