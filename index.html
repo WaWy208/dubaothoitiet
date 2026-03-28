@@ -152,49 +152,11 @@
         </div>
 <div class="hero-aside comp-hero__visual">
   <div class="condition-block comp-condition">
-    <svg class="weather-orb" viewBox="0 0 140 140" aria-hidden="true">
-      <!-- Sun core -->
-      <defs>
-        <radialGradient id="sunCore" cx="50%" cy="50%">
-          <stop offset="0%" stop-color="var(--warm)" stop-opacity="1">
-          <stop offset="50%" stop-color="var(--warm)" stop-opacity="0.8">
-          <stop offset="100%" stop-color="var(--warm)" stop-opacity="0">
-        </radialGradient>
-        <radialGradient id="sunGlow" cx="50%" cy="50%">
-          <stop offset="0%" stop-color="var(--warm)" stop-opacity="0.6">
-          <stop offset="70%" stop-color="var(--warm)" stop-opacity="0.2">
-          <stop offset="100%" stop-color="var(--warm)" stop-opacity="0">
-        </radialGradient>
-        <filter id="orbGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="glow"/>
-          <feMerge>
-            <feMergeNode in="glow"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      <!-- Background ring -->
-      <circle cx="70" cy="70" r="66" fill="none" stroke="url(#comp-ring)" stroke-width="1.5" opacity="0.6" filter="url(#orbGlow)"/>
-      <!-- Weather state layers (controlled by CSS vars) -->
-      <circle class="orb-core" cx="70" cy="70" r="var(--orb-radius, 50)" fill="url(#sunCore)" filter="url(#orbGlow)">
-      <!-- Cloud layer (opacity via --cloud-cover) -->
-      <g class="cloud-layer" opacity="var(--cloud-cover, 0)">
-        <ellipse cx="45" cy="55" rx="22" ry="12" fill="rgba(255,255,255,0.8)" filter="url(#orbGlow)">
-        <ellipse cx="75" cy="50" rx="28" ry="16" fill="rgba(255,255,255,0.6)">
-        <ellipse cx="95" cy="65" rx="18" ry="10" fill="rgba(255,255,255,0.7)">
-      </g>
-      <!-- Rain layer (transform via --rain-intensity) -->
-      <g class="rain-layer" transform="translate(0, var(--rain-offset, 0)) scale(var(--rain-scale, 0))">
-        <rect x="35" y="85" width="2" height="12" rx="1" fill="var(--accent)" opacity="0.9">
-        <rect x="55" y="90" width="2" height="10" rx="1" fill="var(--accent)" opacity="0.8" transform="rotate(5 55 90)">
-        <rect x="85" y="88" width="2" height="11" rx="1" fill="var(--accent)" opacity="0.85">
-      </g>
-      <!-- Lightning (rare flash) -->
-      <path class="lightning" d="M 40 60 L 48 75 L 44 85 L 52 80 L 60 95 L 68 82 L 75 90" stroke="var(--warm)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0" fill="none" filter="url(#orbGlow)">
-    </svg>
-    <canvas class="hero-particles" id="heroParticles" aria-hidden="true"></canvas>
-    <span class="condition-icon comp-condition__icon" id="mainIcon">◐</span>
-    <p class="condition-label comp-condition__label" id="mainDesc">—</p>
+    <canvas class="earth-globe" id="earthGlobe" width="420" height="420" aria-hidden="true"></canvas>
+    <div class="globe-overlay">
+      <span class="condition-icon comp-condition__icon" id="mainIcon">◐</span>
+      <p class="condition-label comp-condition__label" id="mainDesc">—</p>
+    </div>
   </div>
 </div>
       </div>
@@ -342,6 +304,51 @@
       </div>
     </section>
 
+    <section class="block comp-section" id="comparisonSection">
+      <header class="block-head comp-section__head">
+        <h2 class="block-title comp-section__title">So sánh: Cà Mau mới vs Bạc Liêu (cũ)</h2>
+        <p class="block-sub comp-section__sub">Dữ liệu thời gian thực từ OpenWeatherMap</p>
+      </header>
+      <div class="comparison-grid" id="comparisonGrid">
+        <div class="comp-card comp-card--new" id="compCardNew">
+          <div class="comp-card__header">
+            <span class="comp-card__badge comp-badge--new">MỚI</span>
+            <h3 class="comp-card__title">Cà Mau</h3>
+            <p class="comp-card__sub">Tỉnh Cà Mau · 9.18°N, 105.15°E</p>
+          </div>
+          <div class="comp-card__body" id="compBodyNew">
+            <div class="comp-loading">Đang tải dữ liệu…</div>
+          </div>
+        </div>
+        <div class="comp-card comp-card--old" id="compCardOld">
+          <div class="comp-card__header">
+            <span class="comp-card__badge comp-badge--old">CŨ</span>
+            <h3 class="comp-card__title">Bạc Liêu</h3>
+            <p class="comp-card__sub">Tỉnh Bạc Liêu · 9.29°N, 105.72°E</p>
+          </div>
+          <div class="comp-card__body" id="compBodyOld">
+            <div class="comp-loading">Đang tải dữ liệu…</div>
+          </div>
+        </div>
+      </div>
+      <div class="comp-chart-wrap">
+        <h3 class="comp-chart-title">Biểu đồ so sánh nhiệt độ 24h</h3>
+        <div class="chart-card comp-chart">
+          <canvas id="comparisonChart" width="800" height="160"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="block comp-section" id="hydroSection">
+      <header class="block-head comp-section__head">
+        <h2 class="block-title comp-section__title">Trạm quan trắc thủy văn</h2>
+        <p class="block-sub comp-section__sub">Dữ liệu mô phỏng — 5 trạm khu vực Cà Mau</p>
+      </header>
+      <div class="hydro-grid" id="hydroGrid">
+        <div class="comp-loading" style="grid-column:1/-1;text-align:center;padding:32px">Đang tải dữ liệu trạm…</div>
+      </div>
+    </section>
+
     <footer class="site-footer">
       <p>9°10′B, 105°9′Đ · GMT+7 · Dữ liệu minh họa / kết hợp nguồn địa phương</p>
       <p id="footerTime"></p>
@@ -351,6 +358,5 @@
 </div>
 
 <script src="script.js"></script>
-<script src="realtime_features.js"></script>
 </body>
 </html>

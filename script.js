@@ -252,8 +252,22 @@
     const cT = $('currentTemp');
     if (cT) cT.innerHTML = `${RT.dispT(tempC)}<sup id="tempUnitLabel">${su}</sup>`;
     setTxt('feelsLike', `${desc} — Cảm giác ${RT.dispT(feelsC)}°`);
-    animNum($('hiTemp'), RT.dispT(hiC));
-    animNum($('loTemp'), RT.dispT(loC));
+
+    /* Fix Hi/Lo: use forecast data for accurate daily range */
+    let dayHi = hiC, dayLo = loC;
+    if (RT.forecast?.list) {
+      const today = new Date().toDateString();
+      const todayItems = RT.forecast.list.filter(item => 
+        new Date(item.dt * 1000).toDateString() === today);
+      if (todayItems.length > 0) {
+        const allTemps = todayItems.map(i => i.main.temp);
+        allTemps.push(tempC);
+        dayHi = Math.max(...allTemps);
+        dayLo = Math.min(...allTemps);
+      }
+    }
+    animNum($('hiTemp'), RT.dispT(dayHi));
+    animNum($('loTemp'), RT.dispT(dayLo));
 
     /* ── Icon + desc ── */
     const iconEl = $('mainIcon');
@@ -1192,12 +1206,784 @@
   /* ─────────────────────────────────────────────────────────────
    * INIT
    * ───────────────────────────────────────────────────────────── */
+  // Old init removed — new init with all features below
+
+
+  // Public API
+  window.AeroCastRT = {
+    refresh:     refreshAll,
+    exportCSV,
+    setLocation: (lat, lon, name) => { setLocation(lat, lon, name); refreshAll(); },
+    getState:    () => RT,
+  };
+
+  /* ───────────────────────────────────────────────────────────────
+   * SEARCH OVERLAY HANDLER
+   * ─────────────────────────────────────────────────────────────── */
+  function initSearchOverlay() {
+    const overlay = $('searchOverlay');
+    const searchBtn = $('searchBtn');
+    const closeBtn = $('searchClose');
+    const input = $('searchInput');
+    const results = $('searchResults');
+    const tabs = $('districtTabs');
+    if (!overlay || !searchBtn) return;
+
+    // Demo ward data covering Ca Mau districts
+    const WARDS_DATA = [
+      // TP. Cà Mau
+      {id:1,name:'Phường 1',district:'TP. Cà Mau',lat:9.1769,lon:105.1505},
+      {id:2,name:'Phường 2',district:'TP. Cà Mau',lat:9.1785,lon:105.1532},
+      {id:3,name:'Phường 4',district:'TP. Cà Mau',lat:9.1750,lon:105.1480},
+      {id:4,name:'Phường 5',district:'TP. Cà Mau',lat:9.1800,lon:105.1460},
+      {id:5,name:'Phường 6',district:'TP. Cà Mau',lat:9.1720,lon:105.1540},
+      {id:6,name:'Phường 7',district:'TP. Cà Mau',lat:9.1830,lon:105.1490},
+      {id:7,name:'Phường 8',district:'TP. Cà Mau',lat:9.1710,lon:105.1510},
+      {id:8,name:'Phường 9',district:'TP. Cà Mau',lat:9.1760,lon:105.1570},
+      {id:9,name:'Phường Tân Thành',district:'TP. Cà Mau',lat:9.1690,lon:105.1480},
+      {id:10,name:'Phường Tân Xuyên',district:'TP. Cà Mau',lat:9.1820,lon:105.1550},
+      {id:11,name:'Xã An Xuyên',district:'TP. Cà Mau',lat:9.1600,lon:105.1600},
+      {id:12,name:'Xã Tân Thành',district:'TP. Cà Mau',lat:9.1900,lon:105.1700},
+      // U Minh
+      {id:13,name:'TT. U Minh',district:'U Minh',lat:9.3710,lon:104.9790},
+      {id:14,name:'Xã Khánh Hòa',district:'U Minh',lat:9.3500,lon:104.9500},
+      {id:15,name:'Xã Nguyễn Phích',district:'U Minh',lat:9.3900,lon:105.0100},
+      // Thới Bình
+      {id:16,name:'TT. Thới Bình',district:'Thới Bình',lat:9.3167,lon:105.0833},
+      {id:17,name:'Xã Hồ Thị Kỷ',district:'Thới Bình',lat:9.3400,lon:105.0600},
+      {id:18,name:'Xã Tân Bằng',district:'Thới Bình',lat:9.2900,lon:105.0900},
+      // Trần Văn Thời
+      {id:19,name:'TT. Trần Văn Thời',district:'Trần Văn Thời',lat:9.0167,lon:105.0167},
+      {id:20,name:'TT. Sông Đốc',district:'Trần Văn Thời',lat:9.0297,lon:104.8203},
+      {id:21,name:'Xã Lợi An',district:'Trần Văn Thời',lat:9.0500,lon:105.0400},
+      // Cái Nước
+      {id:22,name:'TT. Cái Nước',district:'Cái Nước',lat:9.0103,lon:105.0535},
+      {id:23,name:'Xã Phú Hưng',district:'Cái Nước',lat:9.0300,lon:105.0700},
+      // Đầm Dơi
+      {id:24,name:'TT. Đầm Dơi',district:'Đầm Dơi',lat:8.9626,lon:105.2113},
+      {id:25,name:'Xã Tạ An Khương Nam',district:'Đầm Dơi',lat:8.9800,lon:105.2300},
+      // Năm Căn
+      {id:26,name:'TT. Năm Căn',district:'Năm Căn',lat:8.7500,lon:104.9833},
+      {id:27,name:'Xã Hiệp Tùng',district:'Năm Căn',lat:8.7700,lon:104.9600},
+      // Phú Tân
+      {id:28,name:'TT. Cái Đôi Vàm',district:'Phú Tân',lat:8.9667,lon:104.8333},
+      {id:29,name:'Xã Việt Khái',district:'Phú Tân',lat:8.9500,lon:104.8600},
+      // Ngọc Hiển
+      {id:30,name:'TT. Rạch Gốc',district:'Ngọc Hiển',lat:8.6500,lon:104.9000},
+      {id:31,name:'Xã Đất Mũi',district:'Ngọc Hiển',lat:8.5922,lon:104.7225},
+      {id:32,name:'Xã Viên An',district:'Ngọc Hiển',lat:8.6700,lon:104.9300},
+      // Bạc Liêu (cũ)
+      {id:33,name:'TP. Bạc Liêu',district:'Bạc Liêu (cũ)',lat:9.2941,lon:105.7216},
+      {id:34,name:'TT. Hỏa Bình',district:'Bạc Liêu (cũ)',lat:9.2500,lon:105.6200},
+      {id:35,name:'Xã Vĩnh Trạch',district:'Bạc Liêu (cũ)',lat:9.2800,lon:105.7500},
+      {id:36,name:'TT. Gành Hào',district:'Bạc Liêu (cũ)',lat:9.0300,lon:105.4200},
+    ];
+
+    // Make available globally
+    window.WARDS = window.WARDS || WARDS_DATA;
+    window.WARDS_COORDS = window.WARDS_COORDS || WARDS_DATA;
+
+    let currentFilter = 'all';
+
+    function renderResults(filter, query) {
+      let items = WARDS_DATA;
+      if (filter && filter !== 'all') items = items.filter(w => w.district === filter);
+      if (query) {
+        const q = query.toLowerCase();
+        items = items.filter(w => 
+          w.name.toLowerCase().includes(q) || w.district.toLowerCase().includes(q));
+      }
+
+      if (!items.length) {
+        results.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted)">Không tìm thấy địa điểm nào</div>`;
+        return;
+      }
+
+      results.innerHTML = items.map(w => `
+        <div class="sr-item" data-id="${w.id}">
+          <div class="sr-icon">📍</div>
+          <div>
+            <div class="sr-name">${w.name}</div>
+            <div class="sr-dist">${w.district}</div>
+          </div>
+          <div class="sr-weather">
+            <div class="sr-temp">${w.lat.toFixed(2)}°N</div>
+            <div class="sr-rain">${w.lon.toFixed(2)}°E</div>
+          </div>
+        </div>`).join('');
+
+      // Click handlers
+      results.querySelectorAll('.sr-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const ward = WARDS_DATA.find(w => w.id === parseInt(el.dataset.id));
+          if (ward) {
+            setLocation(ward.lat, ward.lon, ward.name);
+            setTxt('heroCity', ward.name);
+            setTxt('heroLocation', ward.district);
+            setTxt('heroProvince', `${ward.district}, Cà Mau`);
+            overlay.classList.remove('open');
+            toast(`📍 ${ward.name} · ${ward.district}`, 'success');
+            refreshAll();
+          }
+        });
+      });
+    }
+
+    // Open
+    searchBtn.addEventListener('click', () => {
+      overlay.classList.add('open');
+      setTimeout(() => input.focus(), 100);
+      renderResults(currentFilter, input.value);
+    });
+
+    // Close
+    closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+
+    // Search input
+    input.addEventListener('input', () => renderResults(currentFilter, input.value));
+
+    // District tabs
+    tabs.addEventListener('click', (e) => {
+      const btn = e.target.closest('.chip');
+      if (!btn) return;
+      tabs.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.d;
+      renderResults(currentFilter, input.value);
+    });
+
+    // Init results
+    renderResults('all', '');
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+   * SMS MODAL HANDLER
+   * ─────────────────────────────────────────────────────────────── */
+  function initSMSModal() {
+    const modal = $('smsModal');
+    const openBtn = $('openSmsBtn');
+    const closeBtn = $('smsClose');
+    const form = $('smsForm');
+    if (!modal || !openBtn) return;
+
+    openBtn.addEventListener('click', () => modal.classList.add('open'));
+    closeBtn?.addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.remove('open');
+    });
+
+    form?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const phone = $('smsPhone')?.value;
+      const opts = Array.from(form.querySelectorAll('input[name=opts]:checked'))
+        .map(c => c.value);
+      
+      if (!phone || phone.length < 10) {
+        toast('⚠️ Vui lòng nhập số điện thoại hợp lệ', 'warn');
+        return;
+      }
+
+      const labels = { storm:'Bão', flood: 'Triều cường', salinity: 'Xâm nhập mặn' };
+      const selected = opts.map(o => labels[o] || o).join(', ') || 'Tất cả';
+      
+      toast(`✅ Đăng ký thành công: ${phone} • ${selected}`, 'success');
+      modal.classList.remove('open');
+      form.reset();
+    });
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+   * CÀ MAU MỚI vs BẠC LIÊU (CŨ) — COMPARISON
+   * ─────────────────────────────────────────────────────────────── */
+  const COMP_LOCATIONS = {
+    camau:   { lat: 9.1769, lon: 105.1505, name: 'Cà Mau' },
+    baclieu: { lat: 9.2941, lon: 105.7216, name: 'Bạc Liêu' },
+  };
+  const compData = { camau: null, baclieu: null, camauFc: null, baclieuFc: null };
+
+  async function fetchComparison() {
+    try {
+      const [cm, bl, cmFc, blFc] = await Promise.allSettled([
+        owmGet('/weather', { lat: COMP_LOCATIONS.camau.lat, lon: COMP_LOCATIONS.camau.lon }),
+        owmGet('/weather', { lat: COMP_LOCATIONS.baclieu.lat, lon: COMP_LOCATIONS.baclieu.lon }),
+        owmGet('/forecast', { lat: COMP_LOCATIONS.camau.lat, lon: COMP_LOCATIONS.camau.lon, cnt: 8 }),
+        owmGet('/forecast', { lat: COMP_LOCATIONS.baclieu.lat, lon: COMP_LOCATIONS.baclieu.lon, cnt: 8 }),
+      ]);
+      compData.camau   = cm.status === 'fulfilled' ? cm.value : null;
+      compData.baclieu = bl.status === 'fulfilled' ? bl.value : null;
+      compData.camauFc   = cmFc.status === 'fulfilled' ? cmFc.value : null;
+      compData.baclieuFc = blFc.status === 'fulfilled' ? blFc.value : null;
+    } catch (e) {
+      console.error('[Comparison]', e);
+    }
+    renderComparison();
+    renderComparisonChart();
+  }
+
+  function renderCompCard(data, containerId, color) {
+    const el = $(containerId);
+    if (!el || !data) {
+      if (el) el.innerHTML = '<div class="comp-loading">Không có dữ liệu</div>';
+      return;
+    }
+    const w  = data.weather?.[0] || {};
+    const m  = data.main || {};
+    const wind = data.wind || {};
+    const rain = data.rain?.['1h'] || data.rain?.['3h'] || 0;
+    const desc = w.description ? w.description.charAt(0).toUpperCase() + w.description.slice(1) : '—';
+    const icon = weatherEmoji(w.id);
+    const su = RT.unit() === 'F' ? '°F' : '°C';
+    const tempC = m.temp ?? 0;
+
+    el.innerHTML = `
+      <div class="comp-hero-temp">
+        <span class="comp-hero-temp__icon">${icon}</span>
+        <span class="comp-hero-temp__val" style="color:${color}">${RT.dispT(tempC)}${su}</span>
+        <p class="comp-hero-temp__desc">${desc}</p>
+      </div>
+      <div class="comp-stat-grid">
+        <div class="comp-stat">
+          <span class="comp-stat__val">${m.humidity ?? 0}%</span>
+          <span class="comp-stat__lbl">Độ ẩm</span>
+        </div>
+        <div class="comp-stat">
+          <span class="comp-stat__val">${mps2kmh(wind.speed || 0)} km/h</span>
+          <span class="comp-stat__lbl">Gió</span>
+        </div>
+        <div class="comp-stat">
+          <span class="comp-stat__val">${rain.toFixed(1)} mm</span>
+          <span class="comp-stat__lbl">Lượng mưa</span>
+        </div>
+        <div class="comp-stat">
+          <span class="comp-stat__val">${m.pressure ?? 0} hPa</span>
+          <span class="comp-stat__lbl">Áp suất</span>
+        </div>
+      </div>`;
+  }
+
+  function renderComparison() {
+    renderCompCard(compData.camau, 'compBodyNew', 'var(--accent)');
+    renderCompCard(compData.baclieu, 'compBodyOld', 'var(--warm)');
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+   * COMPARISON CHART (Biểu đồ so sánh nhiệt độ)
+   * ─────────────────────────────────────────────────────────────── */
+  function renderComparisonChart() {
+    const canvas = $('comparisonChart');
+    if (!canvas) return;
+    const cmFc = compData.camauFc;
+    const blFc = compData.baclieuFc;
+    if (!cmFc?.list?.length || !blFc?.list?.length) return;
+
+    const ctx = canvas.getContext('2d');
+    const W   = canvas.offsetWidth || 800;
+    const H   = 150;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const cmTemps = cmFc.list.map(i => RT.dispT(i.main.temp));
+    const blTemps = blFc.list.map(i => RT.dispT(i.main.temp));
+    const n = Math.min(cmTemps.length, blTemps.length);
+    if (n < 2) return;
+
+    const allT = [...cmTemps, ...blTemps];
+    const minV = Math.min(...allT) - 2;
+    const maxV = Math.max(...allT) + 3;
+    const px = (i) => 36 + (i / (n - 1)) * (W - 72);
+    const py = (v) => H - 28 - ((v - minV) / (maxV - minV)) * (H - 48);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let f = 0; f <= 1; f += 0.25) {
+      const y = 16 + f * (H - 44);
+      ctx.beginPath(); ctx.moveTo(36, y); ctx.lineTo(W - 36, y); ctx.stroke();
+    }
+
+    // Helper to draw a smooth line
+    function drawLine(temps, color, label) {
+      ctx.beginPath();
+      ctx.moveTo(px(0), py(temps[0]));
+      for (let i = 1; i < n; i++) {
+        const cx = (px(i-1) + px(i)) / 2;
+        ctx.bezierCurveTo(cx, py(temps[i-1]), cx, py(temps[i]), px(i), py(temps[i]));
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      // Dots
+      temps.forEach((t, i) => {
+        ctx.beginPath();
+        ctx.arc(px(i), py(t), 3, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      });
+
+      // Label at end
+      ctx.fillStyle = color;
+      ctx.font = 'bold 10px DM Sans, system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, px(n-1) + 8, py(temps[n-1]) + 3);
+    }
+
+    drawLine(cmTemps, '#3b9eff', 'Cà Mau');
+    drawLine(blTemps, '#f0a04b', 'Bạc Liêu');
+
+    // Time labels
+    cmFc.list.forEach((item, i) => {
+      if (i >= n) return;
+      const dt = new Date(item.dt * 1000);
+      const tl = i === 0 ? 'Hiện tại'
+        : dt.toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit' });
+      ctx.fillStyle = 'rgba(139,147,167,0.75)';
+      ctx.font = '9px DM Sans, system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(tl, px(i), H - 6);
+    });
+
+    // Legend
+    ctx.fillStyle = '#3b9eff';
+    ctx.fillRect(36, 6, 12, 3);
+    ctx.fillStyle = 'rgba(232,234,239,0.8)';
+    ctx.font = '9px DM Sans, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Cà Mau (mới)', 52, 10);
+    ctx.fillStyle = '#f0a04b';
+    ctx.fillRect(130, 6, 12, 3);
+    ctx.fillStyle = 'rgba(232,234,239,0.8)';
+    ctx.fillText('Bạc Liêu (cũ)', 146, 10);
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+   * HYDRO STATIONS
+   * ─────────────────────────────────────────────────────────────── */
+  function sinusoidal(base, amp, phase) {
+    return base + amp * Math.sin(Date.now() / 3600000 + phase);
+  }
+
+  function generateHydroData() {
+    const t = Date.now() / 1000;
+    const tide = Math.sin(t / (6.2 * 3600));
+    return [
+      { id:'S01', name:'Trạm Sông Đốc', type:'Thủy hải văn',
+        salinity: sinusoidal(18.5,3.5,0).toFixed(1),
+        waterLevel: sinusoidal(1.85,0.65,0.5).toFixed(2),
+        flowRate: Math.round(sinusoidal(120,40,1.0)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(18.5,3.5,0) > 22 ? 'alert' : 'normal' },
+      { id:'S02', name:'Trạm Gành Hào', type:'Triều cường & Mặn',
+        salinity: sinusoidal(21.0,4.0,1.2).toFixed(1),
+        waterLevel: sinusoidal(2.10,0.70,1.7).toFixed(2),
+        flowRate: Math.round(sinusoidal(85,30,2.1)),
+        tide: Math.sin(t/(6.2*3600)+0.8) > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(21.0,4.0,1.2) > 24 ? 'warning' : 'normal' },
+      { id:'S03', name:'Trạm Thới Bình', type:'Nước ngọt & Phèn',
+        salinity: sinusoidal(0.4,0.3,2.5).toFixed(1),
+        waterLevel: sinusoidal(0.75,0.25,2.8).toFixed(2),
+        flowRate: Math.round(sinusoidal(45,15,3.2)),
+        tide: 'N/A',
+        status: 'normal' },
+      { id:'S04', name:'Trạm Năm Căn', type:'Thủy hải văn',
+        salinity: sinusoidal(25.0,5.0,3.8).toFixed(1),
+        waterLevel: sinusoidal(1.60,0.55,4.1).toFixed(2),
+        flowRate: Math.round(sinusoidal(200,60,4.5)),
+        tide: Math.sin(t/(6.2*3600)+2.1) > 0 ? 'Triều lên' : 'Triều rút',
+        status: 'normal' },
+      { id:'S05', name:'Trạm Cà Mau', type:'Khí tượng thủy văn',
+        salinity: sinusoidal(1.2,0.5,5.0).toFixed(1),
+        waterLevel: sinusoidal(0.90,0.30,5.3).toFixed(2),
+        flowRate: Math.round(sinusoidal(65,20,5.7)),
+        tide: 'N/A',
+        status: 'normal' },
+    ];
+  }
+
+  function renderHydroStations() {
+    const grid = $('hydroGrid');
+    if (!grid) return;
+    const stations = generateHydroData();
+    const now = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+    grid.innerHTML = stations.map(s => {
+      const statusClass = `hydro-status--${s.status}`;
+      const statusLabel = s.status === 'alert' ? 'Cảnh báo' : s.status === 'warning' ? 'Chú ý' : 'Bình thường';
+      return `
+        <div class="hydro-card">
+          <div class="hydro-card__head">
+            <div>
+              <div class="hydro-card__name">${s.name}
+                <span class="hydro-card__type">${s.type}</span>
+              </div>
+            </div>
+            <div class="hydro-status ${statusClass}">
+              <span class="hydro-status__dot"></span>
+              ${statusLabel}
+            </div>
+          </div>
+          <div class="hydro-metrics">
+            <div class="hydro-metric hydro-metric--sal">
+              <span class="hydro-metric__val">${s.salinity}‰</span>
+              <span class="hydro-metric__lbl">Độ mặn</span>
+            </div>
+            <div class="hydro-metric hydro-metric--wl">
+              <span class="hydro-metric__val">${s.waterLevel}m</span>
+              <span class="hydro-metric__lbl">Mực nước</span>
+            </div>
+            <div class="hydro-metric hydro-metric--flow">
+              <span class="hydro-metric__val">${s.flowRate} m³/s</span>
+              <span class="hydro-metric__lbl">Lưu lượng</span>
+            </div>
+            <div class="hydro-metric hydro-metric--tide">
+              <span class="hydro-metric__val">${s.tide}</span>
+              <span class="hydro-metric__lbl">Thủy triều</span>
+            </div>
+          </div>
+          <div class="hydro-card__footer">
+            <span>${s.id}</span>
+            <span class="hydro-card__time">⛳ ${now}</span>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+   * HERO PARTICLES
+   * ─────────────────────────────────────────────────────────────── */
+  function initHeroParticles() {
+    const canvas = $('heroParticles');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const hero = canvas.closest('.comp-hero');
+    if (!hero) return;
+
+    let W, H, particles = [];
+    const PARTICLE_COUNT = 35;
+
+    function resize() {
+      W = hero.offsetWidth;
+      H = hero.offsetHeight;
+      canvas.width = W * (window.devicePixelRatio || 1);
+      canvas.height = H * (window.devicePixelRatio || 1);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    }
+
+    function createParticle() {
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.3,
+        r: Math.random() * 2 + 0.5,
+        alpha: Math.random() * 0.4 + 0.1,
+        color: Math.random() > 0.5 ? '59,158,255' : '124,92,255',
+      };
+    }
+
+    function init() {
+      resize();
+      particles = [];
+      for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(createParticle());
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = W;
+        if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H;
+        if (p.y > H) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${p.color},${p.alpha})`;
+        ctx.fill();
+      });
+
+      // Draw connections
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < 100) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(59,158,255,${0.08 * (1 - dist/100)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+
+    init();
+    draw();
+    window.addEventListener('resize', () => { resize(); });
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+   * 3D EARTH GLOBE
+   * ─────────────────────────────────────────────────────────────── */
+  function init3DEarth() {
+    const canvas = $('earthGlobe');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let W, H, R, cx, cy;
+    let rotation = 0;
+    const ROTATION_SPEED = 0.003;
+
+    // Cà Mau coordinates in radians
+    const CA_MAU = { lat: 9.18 * Math.PI / 180, lon: 105.15 * Math.PI / 180 };
+
+    // Simplified continent outlines (lat, lon in degrees)
+    const CONTINENTS = [
+      // Southeast Asia (Vietnam region)
+      [[25,100],[23,104],[22,106],[21,107],[18,106],[16,108],[14,109],[11,109],[9,105],[8,104],[7,103],[1,104],[1,110],[7,117],[10,119],[15,119],[18,117],[20,112],[21,110],[23,108],[25,108],[25,100]],
+      // China coast
+      [[25,100],[28,105],[30,110],[32,118],[35,120],[38,122],[40,124],[42,130],[45,132],[48,135],[50,140],[42,140],[40,135],[38,130],[35,128],[30,122],[25,118],[22,114],[25,108],[25,100]],
+      // India
+      [[30,68],[28,72],[25,70],[22,69],[20,72],[18,73],[15,74],[12,76],[10,77],[8,77],[8,79],[12,80],[15,80],[18,83],[20,86],[22,88],[23,90],[25,92],[28,97],[30,97],[32,92],[35,88],[35,78],[33,72],[30,68]],
+      // Australia
+      [[-12,130],[-14,127],[-18,122],[-22,114],[-26,113],[-30,115],[-34,117],[-37,140],[-38,145],[-38,148],[-34,151],[-28,153],[-24,150],[-20,149],[-16,145],[-14,142],[-12,136],[-12,130]],
+      // Africa (simplified)
+      [[35,10],[37,-1],[35,-5],[30,-10],[25,-16],[20,-17],[15,-17],[10,-14],[5,-8],[0,9],[-5,12],[-10,14],[-15,12],[-20,15],[-25,20],[-30,27],[-34,25],[-34,28],[-28,32],[-20,35],[-10,40],[-2,42],[5,50],[10,51],[15,50],[20,42],[25,36],[30,32],[32,30],[35,10]],
+      // Europe
+      [[36,-5],[38,0],[43,3],[46,7],[48,2],[50,5],[52,8],[54,10],[56,12],[58,15],[60,20],[62,28],[60,30],[55,28],[50,30],[47,25],[45,22],[42,20],[40,18],[38,15],[37,12],[36,10],[36,-5]],
+      // South America
+      [[12,-72],[10,-75],[5,-77],[0,-80],[-5,-81],[-10,-78],[-15,-75],[-20,-63],[-25,-65],[-30,-70],[-35,-72],[-40,-68],[-45,-72],[-50,-74],[-54,-68],[-52,-60],[-45,-65],[-40,-62],[-35,-58],[-30,-50],[-25,-48],[-20,-40],[-15,-39],[-10,-37],[-5,-35],[0,-50],[5,-60],[8,-62],[10,-67],[12,-72]],
+      // North America
+      [[15,-90],[20,-100],[25,-110],[30,-118],[35,-120],[40,-124],[45,-124],[50,-128],[55,-130],[60,-140],[65,-165],[68,-165],[70,-155],[72,-130],[70,-90],[65,-75],[60,-65],[55,-60],[50,-55],[48,-63],[45,-65],[42,-70],[40,-75],[35,-80],[30,-85],[30,-82],[28,-80],[25,-80],[20,-90],[15,-90]],
+      // Japan/Korea
+      [[33,130],[35,133],[37,137],[40,140],[42,143],[44,145],[45,142],[43,140],[40,138],[37,135],[35,130],[33,130]],
+      // Indonesia/Philippines
+      [[-6,105],[-7,108],[-8,112],[-8,115],[-7,118],[-5,119],[-3,117],[-2,112],[-3,108],[-5,106],[-6,105]],
+      [[5,120],[7,122],[10,124],[15,121],[18,120],[14,119],[10,118],[7,117],[5,120]],
+    ];
+
+    function resize() {
+      const heroCard = canvas.closest('.comp-hero') || canvas.parentElement;
+      const heroH = heroCard.offsetHeight || 400;
+      const parentW = canvas.parentElement.offsetWidth || 360;
+      const size = Math.min(parentW, heroH - 40, 400);
+      const finalSize = Math.max(size, 200); // minimum 200px
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = finalSize * dpr;
+      canvas.height = finalSize * dpr;
+      canvas.style.width = finalSize + 'px';
+      canvas.style.height = finalSize + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      W = finalSize;
+      H = finalSize;
+      R = finalSize * 0.42;
+      cx = finalSize / 2;
+      cy = finalSize / 2;
+    }
+
+    // Project lat/lon to 2D sphere
+    function project(latDeg, lonDeg) {
+      const lat = latDeg * Math.PI / 180;
+      const lon = lonDeg * Math.PI / 180 + rotation;
+      const x3d = Math.cos(lat) * Math.sin(lon);
+      const y3d = -Math.sin(lat);
+      const z3d = Math.cos(lat) * Math.cos(lon);
+      if (z3d < -0.05) return null; // behind globe
+      return { x: cx + x3d * R, y: cy + y3d * R, z: z3d };
+    }
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // --- Atmosphere glow ---
+      const atmoGrad = ctx.createRadialGradient(cx, cy, R * 0.85, cx, cy, R * 1.3);
+      atmoGrad.addColorStop(0, 'rgba(59,158,255,0)');
+      atmoGrad.addColorStop(0.5, 'rgba(59,158,255,0.06)');
+      atmoGrad.addColorStop(0.8, 'rgba(59,158,255,0.03)');
+      atmoGrad.addColorStop(1, 'rgba(59,158,255,0)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.3, 0, Math.PI * 2);
+      ctx.fillStyle = atmoGrad;
+      ctx.fill();
+
+      // --- Ocean sphere ---
+      const oceanGrad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, 0, cx, cy, R);
+      oceanGrad.addColorStop(0, 'rgba(30,85,170,0.95)');
+      oceanGrad.addColorStop(0.5, 'rgba(15,50,120,0.9)');
+      oceanGrad.addColorStop(1, 'rgba(8,28,70,0.85)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = oceanGrad;
+      ctx.fill();
+
+      // --- Grid lines (latitude/longitude) ---
+      ctx.strokeStyle = 'rgba(59,158,255,0.1)';
+      ctx.lineWidth = 0.5;
+
+      // Latitude lines
+      for (let lat = -60; lat <= 60; lat += 30) {
+        ctx.beginPath();
+        let started = false;
+        for (let lon = -180; lon <= 180; lon += 3) {
+          const p = project(lat, lon);
+          if (p) {
+            if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+            else ctx.lineTo(p.x, p.y);
+          } else { started = false; }
+        }
+        ctx.stroke();
+      }
+
+      // Longitude lines
+      for (let lon = -180; lon < 180; lon += 30) {
+        ctx.beginPath();
+        let started = false;
+        for (let lat = -90; lat <= 90; lat += 3) {
+          const p = project(lat, lon);
+          if (p) {
+            if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+            else ctx.lineTo(p.x, p.y);
+          } else { started = false; }
+        }
+        ctx.stroke();
+      }
+
+      // --- Continents ---
+      CONTINENTS.forEach(continent => {
+        ctx.beginPath();
+        let started = false;
+        let visible = false;
+        continent.forEach(([lat, lon]) => {
+          const p = project(lat, lon);
+          if (p) {
+            if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+            else ctx.lineTo(p.x, p.y);
+            visible = true;
+          } else { started = false; }
+        });
+        if (visible) {
+          ctx.closePath();
+          // Land fill with subtle gradient effect
+          const depth = 0.6 + Math.sin(rotation * 0.5) * 0.1;
+          ctx.fillStyle = `rgba(60,180,100,${0.35 * depth})`;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(80,210,120,${0.4 * depth})`;
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+      });
+
+      // --- Cloud wisps ---
+      const cloudAlpha = 0.12;
+      for (let i = 0; i < 8; i++) {
+        const cLat = Math.sin(i * 1.7 + Date.now() * 0.00002) * 50;
+        const cLon = (i * 47 + Date.now() * 0.008) % 360 - 180;
+        const p = project(cLat, cLon);
+        if (p && p.z > 0.1) {
+          const cloudR = R * (0.06 + Math.sin(i * 2.3) * 0.03);
+          const cg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, cloudR);
+          cg.addColorStop(0, `rgba(255,255,255,${cloudAlpha * p.z})`);
+          cg.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, cloudR, 0, Math.PI * 2);
+          ctx.fillStyle = cg;
+          ctx.fill();
+        }
+      }
+
+      // --- Cà Mau marker ---
+      const cmLatDeg = 9.18, cmLonDeg = 105.15;
+      const cm = project(cmLatDeg, cmLonDeg);
+      if (cm && cm.z > 0) {
+        const pulse = 1 + Math.sin(Date.now() * 0.004) * 0.3;
+        // Outer glow
+        const mg = ctx.createRadialGradient(cm.x, cm.y, 0, cm.x, cm.y, 12 * pulse);
+        mg.addColorStop(0, 'rgba(255,100,50,0.6)');
+        mg.addColorStop(0.5, 'rgba(255,100,50,0.2)');
+        mg.addColorStop(1, 'rgba(255,100,50,0)');
+        ctx.beginPath();
+        ctx.arc(cm.x, cm.y, 12 * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = mg;
+        ctx.fill();
+        // Core dot
+        ctx.beginPath();
+        ctx.arc(cm.x, cm.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff6432';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Label
+        if (cm.z > 0.3) {
+          ctx.font = 'bold 10px "DM Sans", system-ui';
+          ctx.fillStyle = 'rgba(255,255,255,0.85)';
+          ctx.textAlign = 'left';
+          ctx.fillText('Cà Mau', cm.x + 10, cm.y - 4);
+          ctx.font = '8px "DM Sans", system-ui';
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.fillText('9.18°N, 105.15°E', cm.x + 10, cm.y + 7);
+        }
+      }
+
+      // --- Specular highlight ---
+      const specGrad = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.35, 0, cx, cy, R);
+      specGrad.addColorStop(0, 'rgba(255,255,255,0.12)');
+      specGrad.addColorStop(0.4, 'rgba(255,255,255,0.03)');
+      specGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = specGrad;
+      ctx.fill();
+
+      // --- Edge atmosphere ---
+      const edgeGrad = ctx.createRadialGradient(cx, cy, R * 0.88, cx, cy, R * 1.02);
+      edgeGrad.addColorStop(0, 'rgba(59,158,255,0)');
+      edgeGrad.addColorStop(0.7, 'rgba(59,158,255,0.15)');
+      edgeGrad.addColorStop(1, 'rgba(59,158,255,0.05)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.02, 0, Math.PI * 2);
+      ctx.fillStyle = edgeGrad;
+      ctx.fill();
+
+      // Rotate
+      rotation += ROTATION_SPEED;
+      requestAnimationFrame(drawFrame);
+    }
+
+    resize();
+    drawFrame();
+    window.addEventListener('resize', resize);
+  }
+
+  /* ───────────────────────────────────────────────────────────────
+   * INIT
+   * ─────────────────────────────────────────────────────────────── */
   async function init() {
     injectCSS();
     injectHTML();
     patchSelectWard();
     startLiveClock();
     initGPSButton();
+    initSearchOverlay();
+    initSMSModal();
+    initHeroParticles();
+    init3DEarth();
 
     // Wait for main script.js to set up WARDS + WARDS_COORDS
     await new Promise(r => setTimeout(r, 800));
@@ -1210,6 +1996,14 @@
     }
 
     await refreshAll();
+
+    // Fetch comparison data + hydro stations
+    fetchComparison();
+    renderHydroStations();
+    // Auto-refresh hydro every 30s
+    setInterval(renderHydroStations, 30000);
+    // Auto-refresh comparison every 60s
+    setInterval(fetchComparison, 60000);
 
     // Lazy-load radar map on scroll
     if ('IntersectionObserver' in window) {
@@ -1227,21 +2021,16 @@
     // Resize chart on container change
     const ro = new ResizeObserver(() => {
       renderDailyChart();
+      renderComparisonChart();
       if (typeof window.renderChart === 'function') window.renderChart();
     });
     const tc = $('tempChart');
     if (tc) ro.observe(tc);
+    const cc = $('comparisonChart');
+    if (cc) ro.observe(cc);
 
-    console.log('✅ AeroCast Real-Time Engine v2.0 — sẵn sàng');
+    console.log('✅ AeroCast Real-Time Engine v3.0 — sẵn sàng (Cà Mau mới + cũ)');
   }
-
-  // Public API
-  window.AeroCastRT = {
-    refresh:     refreshAll,
-    exportCSV,
-    setLocation: (lat, lon, name) => { setLocation(lat, lon, name); refreshAll(); },
-    getState:    () => RT,
-  };
 
   // Boot after main script.js
   if (document.readyState === 'loading') {
