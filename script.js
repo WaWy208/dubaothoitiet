@@ -7,13 +7,23 @@
 // ── STATE ──
 const STATE = {
   unit: 'C',
-  theme: 'dark',
+  theme: localStorage.getItem('cm_weather_theme') || 'dark',
   selectedWard: null,
   compareA: null,
   compareB: null,
   comparePicking: null,
   currentDistrict: 'all'
 };
+document.documentElement.setAttribute('data-theme', STATE.theme);
+window.addEventListener('DOMContentLoaded', () => {
+  const tOpt = document.querySelector(`.theme-opt[data-t="${STATE.theme}"]`);
+  if (tOpt) {
+    document.querySelectorAll('.theme-opt').forEach(o => o.classList.remove('active'));
+    tOpt.classList.add('active');
+    const btn = document.getElementById('themeBtn');
+    if(btn) btn.textContent = tOpt.textContent.trim().split(' ')[0];
+  }
+});
 
 // ── 147 XÃ / PHƯỜNG / THỊ TRẤN CÀ MAU MỚI (Cà Mau + Bạc Liêu cũ) ──
 const WARDS = [
@@ -1285,11 +1295,28 @@ $('unitToggle').addEventListener('click', () => {
 });
 
 // ── THEME TOGGLE ──
-$('themeBtn').addEventListener('click', () => {
-  STATE.theme = STATE.theme === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', STATE.theme);
-  $('themeBtn').textContent = STATE.theme === 'dark' ? '🌙' : '☀️';
-  showToast(STATE.theme === 'dark' ? '🌙 Giao diện tối' : '☀️ Giao diện sáng');
+$('themeBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('themeDropdown').classList.toggle('show');
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.theme-menu-wrap')) {
+    const d = $('themeDropdown');
+    if (d && d.classList.contains('show')) d.classList.remove('show');
+  }
+});
+document.querySelectorAll('.theme-opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    STATE.theme = opt.dataset.t;
+    localStorage.setItem('cm_weather_theme', STATE.theme);
+    document.documentElement.setAttribute('data-theme', STATE.theme);
+    $('themeBtn').textContent = opt.textContent.trim().split(' ')[0];
+    
+    document.querySelectorAll('.theme-opt').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    $('themeDropdown').classList.remove('show');
+    showToast(`Đổi giao diện: ${opt.textContent.trim().substring(2).trim()}`);
+  });
 });
 
 // ── REFRESH ──

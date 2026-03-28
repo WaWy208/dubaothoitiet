@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from flask_cors import CORS
 import subprocess
 import json
 import threading
@@ -6,6 +7,7 @@ import time
 from datetime import datetime
 
 app = Flask(__name__)
+CORS(app)
 
 cache = None
 cache_time = 0

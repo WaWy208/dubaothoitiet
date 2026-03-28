@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -78,7 +78,16 @@
     <div class="header-right">
       <button class="hdr-btn" id="searchBtn" title="Chọn xã/phường">📍</button>
       <button class="hdr-btn unit-toggle" id="unitToggle">°C</button>
-      <button class="hdr-btn" id="themeBtn">🌙</button>
+      <div class="theme-menu-wrap" style="position:relative;">
+        <button class="hdr-btn" id="themeBtn" title="Đổi giao diện">🌙</button>
+        <div class="theme-dropdown" id="themeDropdown">
+          <div class="theme-opt active" data-t="dark">🌙 Dark Mode</div>
+          <div class="theme-opt" data-t="light">☀️ Light Mode</div>
+          <div class="theme-opt" data-t="ocean">🌊 Ocean Blue</div>
+          <div class="theme-opt" data-t="sunset">🌇 Sunset Glow</div>
+          <div class="theme-opt" data-t="forest">🌲 Deep Forest</div>
+        </div>
+      </div>
       <div class="update-badge">
         <div class="pulse-dot"></div>
         <span id="updateTime">--:--</span>
