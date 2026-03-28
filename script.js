@@ -1,29 +1,6 @@
-/**
- * ╔══════════════════════════════════════════════════════════════╗
- * ║  AeroCast — Real-Time Engine v2.0                           ║
- * ║  Thay thế TOÀN BỘ dữ liệu tĩnh bằng OpenWeatherMap API     ║
- * ║                                                              ║
- * ║  Tính năng:                                                  ║
- * ║  • GPS chính xác → tìm xã/phường gần nhất trong 147 đơn vị ║
- * ║  • Nhiệt độ, độ ẩm, gió, tầm nhìn, áp suất — LIVE          ║
- * ║  • Dự báo theo giờ (24h) — LIVE từ OWM                      ║
- * ║  • Biểu đồ nhiệt độ trong ngày — LIVE animated              ║
- * ║  • 7 ngày tới — LIVE từ OWM forecast                        ║
- * ║  • Chi tiết: UV, AQI, điểm sương, mây, mặt trời — LIVE     ║
- * ║  • Lượng mưa thực tế (mm/h) — LIVE                          ║
- * ║  • Bản đồ radar mưa Leaflet + OWM tiles                     ║
- * ║  • Đồng hồ đếm ngược auto-refresh 60 giây                   ║
- * ║  • Cảnh báo thời tiết cực đoan tự động                      ║
- * ║  • Lịch sử 7 ngày qua                                       ║
- * ╚══════════════════════════════════════════════════════════════╝
- */
-
 (function () {
   'use strict';
 
-  /* ─────────────────────────────────────────────────────────────
-   * CONFIG
-   * ───────────────────────────────────────────────────────────── */
   const OWM_KEY  = '7f318ae139397881686e5acd8dce296c';
   const OWM_BASE = 'https://api.openweathermap.org/data/2.5';
   const OWM_TILE = (layer) =>
@@ -34,9 +11,6 @@
   const DEFAULT_LON = 105.1505;
   const DEFAULT_NAME = 'TP. Cà Mau';
 
-  /* ─────────────────────────────────────────────────────────────
-   * STATE
-   * ───────────────────────────────────────────────────────────── */
   const RT = {
     lat: DEFAULT_LAT, lon: DEFAULT_LON, name: DEFAULT_NAME,
     current: null, forecast: null, airPollution: null, history: [],
@@ -48,10 +22,6 @@
     unit: () => (document.getElementById('unitToggle')?.textContent?.includes('F') ? 'F' : 'C'),
     dispT: (c) => RT.unit() === 'F' ? Math.round(c * 9 / 5 + 32) : Math.round(c),
   };
-
-  /* ─────────────────────────────────────────────────────────────
-   * HELPERS
-   * ───────────────────────────────────────────────────────────── */
   const $  = (id) => document.getElementById(id);
   const qs = (sel) => document.querySelector(sel);
 
@@ -98,10 +68,6 @@
       if (p < 1) requestAnimationFrame(step);
     })(t0);
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * OWM API CALLS
-   * ───────────────────────────────────────────────────────────── */
   async function owmGet(path, extra = {}) {
     const url = new URL(OWM_BASE + path);
     url.searchParams.set('appid', OWM_KEY);
@@ -127,9 +93,6 @@
     RT.airPollution = aqi.status === 'fulfilled' ? aqi.value  : null;
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * LOCATION — GPS + ward matching
-   * ───────────────────────────────────────────────────────────── */
   function haversine(la1, lo1, la2, lo2) {
     const R = 6371, d2r = Math.PI / 180;
     const dLa = (la2 - la1) * d2r, dLo = (lo2 - lo1) * d2r;
@@ -217,9 +180,6 @@
     });
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * RENDER — HERO (current weather)
-   * ───────────────────────────────────────────────────────────── */
   function renderHero() {
     const d = RT.current;
     if (!d) return;
@@ -248,12 +208,10 @@
     const icon = weatherEmoji(w.id);
     const su   = RT.unit() === 'F' ? '°F' : '°C';
 
-    /* ── Hero temps ── */
     const cT = $('currentTemp');
     if (cT) cT.innerHTML = `${RT.dispT(tempC)}<sup id="tempUnitLabel">${su}</sup>`;
     setTxt('feelsLike', `${desc} — Cảm giác ${RT.dispT(feelsC)}°`);
 
-    /* Fix Hi/Lo: use forecast data for accurate daily range */
     let dayHi = hiC, dayLo = loC;
     if (RT.forecast?.list) {
       const today = new Date().toDateString();
@@ -269,29 +227,33 @@
     animNum($('hiTemp'), RT.dispT(dayHi));
     animNum($('loTemp'), RT.dispT(dayLo));
 
-    /* ── Icon + desc ── */
     const iconEl = $('mainIcon');
     if (iconEl) { iconEl.textContent = icon; iconEl.title = desc; }
     setTxt('mainDesc', desc);
 
-    /* ── Location labels ── */
     setTxt('heroCity',      RT.name);
     setTxt('currentLocSub', `${RT.name} · Real-time`);
 
-    /* ── Metrics strip ── */
+    if (window.WARDS_COORDS) {
+      const wRes = nearestWard(RT.lat, RT.lon);
+      if (wRes && wRes.ward) {
+        setTxt('heroLocation', wRes.ward.district);
+        const isBL = ['TP. Bạc Liêu', 'Hòa Bình', 'Vĩnh Lợi', 'Hồng Dân', 'Phước Long', 'TX. Giá Rai', 'Đông Hải'].includes(wRes.ward.district);
+        setTxt('heroProvince', isBL ? 'Tỉnh Bạc Liêu, Việt Nam' : 'Tỉnh Cà Mau, Việt Nam');
+      }
+    }
+
     setTxt('sHumidity',   humidity + '%');
     setTxt('sWind',       windSpd + ' km/h');
     setTxt('sVisibility', vis ? (vis / 1000).toFixed(1) + ' km' : '≥10 km');
     setTxt('sPressure',   pressure + ' hPa');
 
-    /* ── Wind compass ── */
     setTxt('windSpeedText', windSpd + ' km/h');
     setTxt('windDirText',   windDirText(windDeg));
     setTxt('windGustText',  windGust ? `Giật ${windGust} km/h` : 'Không có giật');
     const needle = $('windNeedle');
     if (needle) needle.style.setProperty('--wind-deg', windDeg + 'deg');
 
-    /* ── Rain ── */
     setTxt('detailRainMm', (rain + snow).toFixed(1) + ' mm/h');
     const pop       = RT.forecast?.list?.[0]?.pop ?? 0;
     const rainProb  = Math.round(pop * 100);
@@ -299,14 +261,12 @@
     const rfill = $('rainBarFill');
     if (rfill) rfill.style.width = rainProb + '%';
 
-    /* ── Cloud / dew ── */
     setTxt('detailCloud', clouds);
     const cbf = $('cloudBarFill');
     if (cbf) cbf.style.width = clouds + '%';
     const dew = Math.round(tempC - (100 - humidity) / 5);
     setTxt('detailDew', RT.dispT(dew) + su);
 
-    /* ── Sunrise / Sunset ── */
     if (sys.sunrise && sys.sunset) {
       const sr  = new Date(sys.sunrise * 1000);
       const ss  = new Date(sys.sunset  * 1000);
@@ -319,10 +279,8 @@
       animateSunArc(sr, ss);
     }
 
-    /* ── Sync pill time ── */
     setTxt('updateTime', new Date().toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit' }));
 
-    /* ── Orb CSS vars ── */
     const rPct = Math.min((rain + snow) / 25, 1);
     const root = document.documentElement;
     root.style.setProperty('--cloud-cover', Math.min(clouds / 100 * 0.9, 0.85));
@@ -333,10 +291,6 @@
 
     checkExtremeAlert();
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * RENDER — HOURLY (24h từ OWM forecast/3h)
-   * ───────────────────────────────────────────────────────────── */
   function renderHourly() {
     const fc = RT.forecast;
     if (!fc?.list) return;
@@ -363,7 +317,6 @@
       </div>`;
     }).join('');
 
-    // Update global HOURS so original renderChart() uses live data
     if (window.HOURS) {
       items.forEach((item, i) => {
         if (!window.HOURS[i]) return;
@@ -377,9 +330,6 @@
     }
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * RENDER — DAILY CHART (biểu đồ nhiệt độ trong ngày)
-   * ───────────────────────────────────────────────────────────── */
   function renderDailyChart() {
     const canvas = $('tempChart');
     if (!canvas || !RT.forecast?.list) return;
@@ -404,7 +354,6 @@
     const px = (i) => 24 + (i / (n - 1)) * (W - 48);
     const py = (v) => H - 28 - ((v - minV) / (maxV - minV)) * (H - 52);
 
-    // Grid lines
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.lineWidth = 1;
     [0, 0.25, 0.5, 0.75, 1].forEach(f => {
@@ -412,14 +361,12 @@
       ctx.beginPath(); ctx.moveTo(24, y); ctx.lineTo(W - 24, y); ctx.stroke();
     });
 
-    // Rain bars (behind)
     rains.forEach((r, i) => {
       const bH = (r / 100) * (H - 44);
       ctx.fillStyle = `rgba(56,189,248,${0.08 + r / 600})`;
       ctx.fillRect(px(i) - 7, H - 20 - bH, 14, bH);
     });
 
-    // Area fill
     const aGrad = ctx.createLinearGradient(0, 0, 0, H);
     aGrad.addColorStop(0, 'rgba(251,146,60,0.30)');
     aGrad.addColorStop(1, 'rgba(251,146,60,0.02)');
@@ -432,7 +379,6 @@
     ctx.lineTo(px(n-1), H-20); ctx.lineTo(px(0), H-20);
     ctx.closePath(); ctx.fillStyle = aGrad; ctx.fill();
 
-    // Line
     ctx.beginPath();
     ctx.moveTo(px(0), py(temps[0]));
     for (let i = 1; i < n; i++) {
@@ -442,7 +388,6 @@
     ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 2.5;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
 
-    // Dots + labels
     items.forEach((item, i) => {
       const x = px(i), y = py(temps[i]);
       ctx.save();
@@ -469,9 +414,6 @@
     });
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * RENDER — 7-DAY FORECAST (nhóm theo ngày từ OWM 5-day)
-   * ───────────────────────────────────────────────────────────── */
   function renderForecast7Day() {
     const fc = RT.forecast;
     if (!fc?.list) return;
@@ -490,7 +432,6 @@
     const days  = Object.entries(byDay).slice(0, 7);
     const wkday = ['CN','T2','T3','T4','T5','T6','T7'];
 
-    // Update global FORECAST array
     if (window.FORECAST) {
       days.forEach(([key, data], i) => {
         const hi   = Math.max(...data.temps);
@@ -516,7 +457,6 @@
       });
     }
 
-    // Render #forecastList
     const fl = $('forecastList');
     if (!fl) return;
     fl.innerHTML = days.map(([key, data], i) => {
@@ -549,9 +489,6 @@
     }).join('');
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * RENDER — CHI TIẾT (UV, AQI, áp suất, điểm sương, mây, mưa)
-   * ───────────────────────────────────────────────────────────── */
   function renderDetails() {
     const d   = RT.current;
     const aqi = RT.airPollution;
@@ -565,7 +502,6 @@
     const pop      = RT.forecast?.list?.[0]?.pop ?? 0;
     const rainProb = Math.round(pop * 100);
 
-    // UV estimate (OWM free tier)
     const hr        = new Date().getHours();
     const sunFactor = (hr >= 6 && hr <= 18)
       ? Math.sin(Math.PI * (hr - 6) / 12) : 0;
@@ -581,7 +517,6 @@
     const uvEl = $('detailUv');
     if (uvEl) uvEl.className = `detail-stat ${uvCls[uvi]}`;
 
-    // AQI
     if (aqi?.list?.[0]) {
       const comp = aqi.list[0].components || {};
       const aqiI = aqi.list[0].main?.aqi ?? 2;
@@ -603,7 +538,6 @@
       if ($('o3'))   $('o3').textContent   = ((comp.o3   || 0) / 1000).toFixed(3);
     }
 
-    // Rain
     setTxt('detailRainMm',  rain.toFixed(1) + ' mm/h');
     setTxt('detailRainProb', `Xác suất mưa ${rainProb}%`);
     const rfill = $('rainBarFill');
@@ -620,10 +554,6 @@
     // Pressure
     setTxt('sPressure', (m.pressure || 1010) + ' hPa');
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * SUN ARC — dot di chuyển theo giờ mặt trời thực
-   * ───────────────────────────────────────────────────────────── */
   function animateSunArc(sunrise, sunset) {
     const now = new Date();
     const pct = Math.min(1, Math.max(0, (now - sunrise) / (sunset - sunrise)));
@@ -640,9 +570,6 @@
     if (arcPath) arcPath.style.strokeDashoffset = (480 * (1 - pct)).toFixed(0);
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * CẢNH BÁO THỜI TIẾT CỰC ĐOAN
-   * ───────────────────────────────────────────────────────────── */
   function checkExtremeAlert() {
     const d = RT.current;
     if (!d) return;
@@ -696,10 +623,6 @@
       RT.dismissedAlerts.add(key);
     }, 14000);
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * LỊCH SỬ 7 NGÀY QUA
-   * ───────────────────────────────────────────────────────────── */
   function buildHistory() {
     const cur = RT.current;
     const fc  = RT.forecast;
@@ -763,10 +686,6 @@
         <td class="hist-wind">${r.wind} km/h</td>
       </tr>`).join('');
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * RADAR MAP (Leaflet + OWM tiles)
-   * ───────────────────────────────────────────────────────────── */
   function initRadarMap() {
     const cont = $('rt-radar-map');
     if (!cont || RT.leafletMap) return;
@@ -810,10 +729,6 @@
     });
     setTimeout(() => RT.leafletMap.invalidateSize(), 300);
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * COUNTDOWN + AUTO-REFRESH
-   * ───────────────────────────────────────────────────────────── */
   function startCountdown() {
     if (RT.countdownTimer) clearInterval(RT.countdownTimer);
     RT.countdownSec = REFRESH_SEC;
@@ -840,10 +755,6 @@
     tick();
     setInterval(tick, 1000);
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * XUẤT CSV
-   * ───────────────────────────────────────────────────────────── */
   function exportCSV() {
     const rows = [
       ['Ngày/Giờ','Địa điểm','Nhiệt (°C)','Cảm giác (°C)','Cao (°C)','Thấp (°C)',
@@ -885,10 +796,6 @@
     URL.revokeObjectURL(url);
     toast('📥 Đã tải xuống CSV', 'success');
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * MAIN REFRESH
-   * ───────────────────────────────────────────────────────────── */
   async function refreshAll() {
     const dot    = qs('.sync-dot');
     const badge  = $('rt-live-badge');
@@ -905,7 +812,6 @@
       renderDetails();
       buildHistory();
 
-      // Trigger original script renders with updated globals
       if (typeof window.renderForecastHome === 'function') window.renderForecastHome();
       if (typeof window.renderChart        === 'function') window.renderChart();
       if (typeof window.renderDashboard    === 'function') window.renderDashboard();
@@ -928,10 +834,6 @@
 
     startCountdown();
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * PATCH selectWard — cập nhật tọa độ + trigger refreshAll
-   * ───────────────────────────────────────────────────────────── */
   function patchSelectWard() {
     const orig = window.selectWard;
     if (typeof orig !== 'function') return;
@@ -946,14 +848,10 @@
     };
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * INJECT HTML
-   * ───────────────────────────────────────────────────────────── */
   function injectHTML() {
     const mainFlow = qs('.main-flow');
     if (!mainFlow) return;
 
-    // 1. Live badge + countdown
     const topBar = qs('.top-actions');
     if (topBar && !$('rt-live-badge')) {
       const wrap = document.createElement('div');
@@ -974,7 +872,6 @@
       topBar.prepend(wrap);
     }
 
-    // 2. Radar map
     if (!$('rt-radar-section')) {
       const sec = document.createElement('section');
       sec.id = 'rt-radar-section';
@@ -999,7 +896,6 @@
       sunSec ? sunSec.before(sec) : mainFlow.appendChild(sec);
     }
 
-    // 3. History
     if (!$('rt-history-section')) {
       const sec = document.createElement('section');
       sec.id = 'rt-history-section';
@@ -1029,7 +925,6 @@
       $('rt-history-refresh')?.addEventListener('click', buildHistory);
     }
 
-    // 4. Footer: live clock + export
     const footer = qs('.site-footer');
     if (footer && !$('rt-live-clock')) {
       const div = document.createElement('div');
@@ -1052,9 +947,6 @@
     }
   }
 
-  /* ─────────────────────────────────────────────────────────────
-   * CSS
-   * ───────────────────────────────────────────────────────────── */
   function injectCSS() {
     if ($('rt-styles')) return;
     const s = document.createElement('style');
@@ -1202,24 +1094,12 @@
     `;
     document.head.appendChild(s);
   }
-
-  /* ─────────────────────────────────────────────────────────────
-   * INIT
-   * ───────────────────────────────────────────────────────────── */
-  // Old init removed — new init with all features below
-
-
-  // Public API
   window.AeroCastRT = {
     refresh:     refreshAll,
     exportCSV,
     setLocation: (lat, lon, name) => { setLocation(lat, lon, name); refreshAll(); },
     getState:    () => RT,
   };
-
-  /* ───────────────────────────────────────────────────────────────
-   * SEARCH OVERLAY HANDLER
-   * ─────────────────────────────────────────────────────────────── */
   function initSearchOverlay() {
     const overlay = $('searchOverlay');
     const searchBtn = $('searchBtn');
@@ -1228,10 +1108,7 @@
     const results = $('searchResults');
     const tabs = $('districtTabs');
     if (!overlay || !searchBtn) return;
-
-    // Demo ward data covering Ca Mau districts
     const WARDS_DATA = [
-      // TP. Cà Mau
       {id:1,name:'Phường 1',district:'TP. Cà Mau',lat:9.1769,lon:105.1505},
       {id:2,name:'Phường 2',district:'TP. Cà Mau',lat:9.1785,lon:105.1532},
       {id:3,name:'Phường 4',district:'TP. Cà Mau',lat:9.1750,lon:105.1480},
@@ -1244,44 +1121,108 @@
       {id:10,name:'Phường Tân Xuyên',district:'TP. Cà Mau',lat:9.1820,lon:105.1550},
       {id:11,name:'Xã An Xuyên',district:'TP. Cà Mau',lat:9.1600,lon:105.1600},
       {id:12,name:'Xã Tân Thành',district:'TP. Cà Mau',lat:9.1900,lon:105.1700},
-      // U Minh
+
       {id:13,name:'TT. U Minh',district:'U Minh',lat:9.3710,lon:104.9790},
       {id:14,name:'Xã Khánh Hòa',district:'U Minh',lat:9.3500,lon:104.9500},
       {id:15,name:'Xã Nguyễn Phích',district:'U Minh',lat:9.3900,lon:105.0100},
-      // Thới Bình
+
       {id:16,name:'TT. Thới Bình',district:'Thới Bình',lat:9.3167,lon:105.0833},
       {id:17,name:'Xã Hồ Thị Kỷ',district:'Thới Bình',lat:9.3400,lon:105.0600},
       {id:18,name:'Xã Tân Bằng',district:'Thới Bình',lat:9.2900,lon:105.0900},
-      // Trần Văn Thời
+
       {id:19,name:'TT. Trần Văn Thời',district:'Trần Văn Thời',lat:9.0167,lon:105.0167},
       {id:20,name:'TT. Sông Đốc',district:'Trần Văn Thời',lat:9.0297,lon:104.8203},
       {id:21,name:'Xã Lợi An',district:'Trần Văn Thời',lat:9.0500,lon:105.0400},
-      // Cái Nước
+
       {id:22,name:'TT. Cái Nước',district:'Cái Nước',lat:9.0103,lon:105.0535},
       {id:23,name:'Xã Phú Hưng',district:'Cái Nước',lat:9.0300,lon:105.0700},
-      // Đầm Dơi
+
       {id:24,name:'TT. Đầm Dơi',district:'Đầm Dơi',lat:8.9626,lon:105.2113},
       {id:25,name:'Xã Tạ An Khương Nam',district:'Đầm Dơi',lat:8.9800,lon:105.2300},
-      // Năm Căn
+
       {id:26,name:'TT. Năm Căn',district:'Năm Căn',lat:8.7500,lon:104.9833},
       {id:27,name:'Xã Hiệp Tùng',district:'Năm Căn',lat:8.7700,lon:104.9600},
-      // Phú Tân
+
       {id:28,name:'TT. Cái Đôi Vàm',district:'Phú Tân',lat:8.9667,lon:104.8333},
       {id:29,name:'Xã Việt Khái',district:'Phú Tân',lat:8.9500,lon:104.8600},
-      // Ngọc Hiển
+
       {id:30,name:'TT. Rạch Gốc',district:'Ngọc Hiển',lat:8.6500,lon:104.9000},
       {id:31,name:'Xã Đất Mũi',district:'Ngọc Hiển',lat:8.5922,lon:104.7225},
       {id:32,name:'Xã Viên An',district:'Ngọc Hiển',lat:8.6700,lon:104.9300},
-      // Bạc Liêu (cũ)
-      {id:33,name:'TP. Bạc Liêu',district:'Bạc Liêu (cũ)',lat:9.2941,lon:105.7216},
-      {id:34,name:'TT. Hỏa Bình',district:'Bạc Liêu (cũ)',lat:9.2500,lon:105.6200},
-      {id:35,name:'Xã Vĩnh Trạch',district:'Bạc Liêu (cũ)',lat:9.2800,lon:105.7500},
-      {id:36,name:'TT. Gành Hào',district:'Bạc Liêu (cũ)',lat:9.0300,lon:105.4200},
+
+      // ── TP. BẠC LIÊU (7 phường + 3 xã) ──
+      {id:33,name:'Phường 1',district:'TP. Bạc Liêu',lat:9.2941,lon:105.7216},
+      {id:34,name:'Phường 2',district:'TP. Bạc Liêu',lat:9.2960,lon:105.7240},
+      {id:35,name:'Phường 3',district:'TP. Bạc Liêu',lat:9.2920,lon:105.7190},
+      {id:36,name:'Phường 5',district:'TP. Bạc Liêu',lat:9.2980,lon:105.7170},
+      {id:37,name:'Phường 7',district:'TP. Bạc Liêu',lat:9.3010,lon:105.7200},
+      {id:38,name:'Phường 8',district:'TP. Bạc Liêu',lat:9.2890,lon:105.7250},
+      {id:39,name:'Phường Nhà Mát',district:'TP. Bạc Liêu',lat:9.3200,lon:105.7500},
+      {id:40,name:'Xã Vĩnh Trạch',district:'TP. Bạc Liêu',lat:9.2800,lon:105.7450},
+      {id:41,name:'Xã Vĩnh Trạch Đông',district:'TP. Bạc Liêu',lat:9.2700,lon:105.7600},
+      {id:42,name:'Xã Hiệp Thành',district:'TP. Bạc Liêu',lat:9.3100,lon:105.7350},
+
+      // ── HUYỆN HÒA BÌNH (1 thị trấn + 5 xã) ──
+      {id:43,name:'TT. Hòa Bình',district:'Hòa Bình',lat:9.2500,lon:105.6200},
+      {id:44,name:'Xã Vĩnh Bình',district:'Hòa Bình',lat:9.2300,lon:105.6100},
+      {id:45,name:'Xã Vĩnh Mỹ A',district:'Hòa Bình',lat:9.2100,lon:105.5900},
+      {id:46,name:'Xã Vĩnh Mỹ B',district:'Hòa Bình',lat:9.2200,lon:105.6000},
+      {id:47,name:'Xã Vĩnh Hậu',district:'Hòa Bình',lat:9.1900,lon:105.5700},
+      {id:48,name:'Xã Vĩnh Hậu A',district:'Hòa Bình',lat:9.1800,lon:105.5600},
+
+      // ── HUYỆN VĨNH LỢI (1 thị trấn + 7 xã) ──
+      {id:49,name:'TT. Châu Hưng',district:'Vĩnh Lợi',lat:9.3200,lon:105.6900},
+      {id:50,name:'Xã Châu Hưng A',district:'Vĩnh Lợi',lat:9.3100,lon:105.6750},
+      {id:51,name:'Xã Hưng Hội',district:'Vĩnh Lợi',lat:9.3300,lon:105.6600},
+      {id:52,name:'Xã Hưng Thành',district:'Vĩnh Lợi',lat:9.3400,lon:105.6800},
+      {id:53,name:'Xã Long Thạnh',district:'Vĩnh Lợi',lat:9.3500,lon:105.7000},
+      {id:54,name:'Xã Vĩnh Mỹ',district:'Vĩnh Lợi',lat:9.3000,lon:105.7100},
+      {id:55,name:'Xã Châu Thới',district:'Vĩnh Lợi',lat:9.2800,lon:105.6850},
+      {id:56,name:'Xã Nhà Mát',district:'Vĩnh Lợi',lat:9.3200,lon:105.7400},
+
+      // ── HUYỆN HỒNG DÂN (2 thị trấn + 5 xã) ──
+      {id:57,name:'TT. Ngan Dừa',district:'Hồng Dân',lat:9.4800,lon:105.5300},
+      {id:58,name:'TT. Hồng Dân',district:'Hồng Dân',lat:9.5000,lon:105.5100},
+      {id:59,name:'Xã Ninh Quới',district:'Hồng Dân',lat:9.4600,lon:105.5500},
+      {id:60,name:'Xã Ninh Quới A',district:'Hồng Dân',lat:9.4700,lon:105.5700},
+      {id:61,name:'Xã Ninh Hòa',district:'Hồng Dân',lat:9.5100,lon:105.5200},
+      {id:62,name:'Xã Lộc Ninh',district:'Hồng Dân',lat:9.5300,lon:105.5400},
+      {id:63,name:'Xã Vĩnh Lộc',district:'Hồng Dân',lat:9.5500,lon:105.5600},
+
+      // ── HUYỆN PHƯỚC LONG (1 thị trấn + 6 xã) ──
+      {id:64,name:'TT. Phước Long',district:'Phước Long',lat:9.3900,lon:105.4600},
+      {id:65,name:'Xã Phước Long',district:'Phước Long',lat:9.3700,lon:105.4400},
+      {id:66,name:'Xã Hưng Phú',district:'Phước Long',lat:9.4000,lon:105.4800},
+      {id:67,name:'Xã Vĩnh Phú Đông',district:'Phước Long',lat:9.4100,lon:105.5000},
+      {id:68,name:'Xã Vĩnh Phú Tây',district:'Phước Long',lat:9.4200,lon:105.5200},
+      {id:69,name:'Xã Phong Thạnh Tây A',district:'Phước Long',lat:9.3500,lon:105.4300},
+      {id:70,name:'Xã Phong Thạnh Tây B',district:'Phước Long',lat:9.3400,lon:105.4200},
+
+      // ── TX. GIÁ RAI (3 phường + 6 xã) ──
+      {id:71,name:'Phường 1 (Giá Rai)',district:'TX. Giá Rai',lat:9.2000,lon:105.4700},
+      {id:72,name:'Phường Hộ Phòng',district:'TX. Giá Rai',lat:9.1800,lon:105.4900},
+      {id:73,name:'Phường Láng Tròn',district:'TX. Giá Rai',lat:9.2100,lon:105.4600},
+      {id:74,name:'Xã Phong Thạnh',district:'TX. Giá Rai',lat:9.2300,lon:105.4500},
+      {id:75,name:'Xã Phong Thạnh A',district:'TX. Giá Rai',lat:9.2400,lon:105.4400},
+      {id:76,name:'Xã Phong Tân',district:'TX. Giá Rai',lat:9.1700,lon:105.5000},
+      {id:77,name:'Xã Tân Phong',district:'TX. Giá Rai',lat:9.1600,lon:105.5100},
+      {id:78,name:'Xã Long Điền',district:'TX. Giá Rai',lat:9.2200,lon:105.4300},
+      {id:79,name:'Xã Long Điền Đông',district:'TX. Giá Rai',lat:9.2100,lon:105.4200},
+
+      // ── HUYỆN ĐÔNG HẢI (1 thị trấn + 7 xã) ──
+      {id:80,name:'TT. Gành Hào',district:'Đông Hải',lat:9.0300,lon:105.4200},
+      {id:81,name:'Xã Long Điền Đông A',district:'Đông Hải',lat:9.0700,lon:105.4400},
+      {id:82,name:'Xã Long Điền Tây',district:'Đông Hải',lat:9.0900,lon:105.4600},
+      {id:83,name:'Xã Điền Hải',district:'Đông Hải',lat:9.0500,lon:105.4000},
+      {id:84,name:'Xã An Trạch',district:'Đông Hải',lat:9.1100,lon:105.4700},
+      {id:85,name:'Xã An Trạch A',district:'Đông Hải',lat:9.1000,lon:105.4500},
+      {id:86,name:'Xã Định Thành',district:'Đông Hải',lat:9.0800,lon:105.4300},
+      {id:87,name:'Xã Định Thành A',district:'Đông Hải',lat:9.0600,lon:105.4100},
+      
     ];
 
-    // Make available globally
-    window.WARDS = window.WARDS || WARDS_DATA;
-    window.WARDS_COORDS = window.WARDS_COORDS || WARDS_DATA;
+    window.WARDS = WARDS_DATA;
+    window.WARDS_COORDS = WARDS_DATA;
 
     let currentFilter = 'all';
 
@@ -1312,15 +1253,11 @@
           </div>
         </div>`).join('');
 
-      // Click handlers
       results.querySelectorAll('.sr-item').forEach(el => {
         el.addEventListener('click', () => {
           const ward = WARDS_DATA.find(w => w.id === parseInt(el.dataset.id));
           if (ward) {
             setLocation(ward.lat, ward.lon, ward.name);
-            setTxt('heroCity', ward.name);
-            setTxt('heroLocation', ward.district);
-            setTxt('heroProvince', `${ward.district}, Cà Mau`);
             overlay.classList.remove('open');
             toast(`📍 ${ward.name} · ${ward.district}`, 'success');
             refreshAll();
@@ -1355,13 +1292,9 @@
       renderResults(currentFilter, input.value);
     });
 
-    // Init results
     renderResults('all', '');
   }
 
-  /* ───────────────────────────────────────────────────────────────
-   * SMS MODAL HANDLER
-   * ─────────────────────────────────────────────────────────────── */
   function initSMSModal() {
     const modal = $('smsModal');
     const openBtn = $('openSmsBtn');
@@ -1395,9 +1328,6 @@
     });
   }
 
-  /* ───────────────────────────────────────────────────────────────
-   * CÀ MAU MỚI vs BẠC LIÊU (CŨ) — COMPARISON
-   * ─────────────────────────────────────────────────────────────── */
   const COMP_LOCATIONS = {
     camau:   { lat: 9.1769, lon: 105.1505, name: 'Cà Mau' },
     baclieu: { lat: 9.2941, lon: 105.7216, name: 'Bạc Liêu' },
@@ -1469,9 +1399,6 @@
     renderCompCard(compData.baclieu, 'compBodyOld', 'var(--warm)');
   }
 
-  /* ───────────────────────────────────────────────────────────────
-   * COMPARISON CHART (Biểu đồ so sánh nhiệt độ)
-   * ─────────────────────────────────────────────────────────────── */
   function renderComparisonChart() {
     const canvas = $('comparisonChart');
     if (!canvas) return;
@@ -1501,7 +1428,6 @@
     const px = (i) => 36 + (i / (n - 1)) * (W - 72);
     const py = (v) => H - 28 - ((v - minV) / (maxV - minV)) * (H - 48);
 
-    // Grid
     ctx.strokeStyle = 'rgba(255,255,255,0.04)';
     ctx.lineWidth = 1;
     for (let f = 0; f <= 1; f += 0.25) {
@@ -1509,7 +1435,6 @@
       ctx.beginPath(); ctx.moveTo(36, y); ctx.lineTo(W - 36, y); ctx.stroke();
     }
 
-    // Helper to draw a smooth line
     function drawLine(temps, color, label) {
       ctx.beginPath();
       ctx.moveTo(px(0), py(temps[0]));
@@ -1523,7 +1448,6 @@
       ctx.lineJoin = 'round';
       ctx.stroke();
 
-      // Dots
       temps.forEach((t, i) => {
         ctx.beginPath();
         ctx.arc(px(i), py(t), 3, 0, Math.PI * 2);
@@ -1531,7 +1455,6 @@
         ctx.fill();
       });
 
-      // Label at end
       ctx.fillStyle = color;
       ctx.font = 'bold 10px DM Sans, system-ui';
       ctx.textAlign = 'left';
@@ -1541,7 +1464,6 @@
     drawLine(cmTemps, '#3b9eff', 'Cà Mau');
     drawLine(blTemps, '#f0a04b', 'Bạc Liêu');
 
-    // Time labels
     cmFc.list.forEach((item, i) => {
       if (i >= n) return;
       const dt = new Date(item.dt * 1000);
@@ -1553,7 +1475,6 @@
       ctx.fillText(tl, px(i), H - 6);
     });
 
-    // Legend
     ctx.fillStyle = '#3b9eff';
     ctx.fillRect(36, 6, 12, 3);
     ctx.fillStyle = 'rgba(232,234,239,0.8)';
@@ -1566,9 +1487,6 @@
     ctx.fillText('Bạc Liêu (cũ)', 146, 10);
   }
 
-  /* ───────────────────────────────────────────────────────────────
-   * HYDRO STATIONS
-   * ─────────────────────────────────────────────────────────────── */
   function sinusoidal(base, amp, phase) {
     return base + amp * Math.sin(Date.now() / 3600000 + phase);
   }
