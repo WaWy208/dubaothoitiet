@@ -122,6 +122,7 @@
       RT._marker.setLatLng([lat, lon]).openPopup();
       RT.leafletMap.panTo([lat, lon], { animate: true });
     }
+    if (window.updateGPSMarker) window.updateGPSMarker(lat, lon);
   }
 
   function initGPSButton() {
@@ -1670,225 +1671,218 @@
     window.addEventListener('resize', () => { resize(); });
   }
 
-  /* ───────────────────────────────────────────────────────────────
-   * 3D EARTH GLOBE
-   * ─────────────────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────
+ * Realistic 3D Earth Globe with Three.js
+ * ─────────────────────────────────────────────────────────────── */
   function init3DEarth() {
-    const canvas = $('earthGlobe');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let W, H, R, cx, cy;
-    let rotation = 0;
-    const ROTATION_SPEED = 0.003;
+    const container = $('earthGlobe');
+    if (!container || window.earthScene) return;
+    
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true, alpha: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    // Cà Mau coordinates in radians
-    const CA_MAU = { lat: 9.18 * Math.PI / 180, lon: 105.15 * Math.PI / 180 };
+    window.earthScene = { scene, camera, renderer, container };
 
-    // Simplified continent outlines (lat, lon in degrees)
-    const CONTINENTS = [
-      // Vietnam
-      [[25, 100], [23, 104], [22, 106], [21, 107], [18, 106], [16, 108], [14, 109], [11, 109], [9, 105], [8, 104], [7, 103], [1, 104], [1, 110], [7, 117], [10, 119], [15, 119], [18, 117], [20, 112], [21, 110], [23, 108], [25, 108], [25, 100]],
-      // China 
-      [[25, 100], [28, 105], [30, 110], [32, 118], [35, 120], [38, 122], [40, 124], [42, 130], [45, 132], [48, 135], [50, 140], [42, 140], [40, 135], [38, 130], [35, 128], [30, 122], [25, 118], [22, 114], [25, 108], [25, 100]],
-      // India
-      [[30, 68], [28, 72], [25, 70], [22, 69], [20, 72], [18, 73], [15, 74], [12, 76], [10, 77], [8, 77], [8, 79], [12, 80], [15, 80], [18, 83], [20, 86], [22, 88], [23, 90], [25, 92], [28, 97], [30, 97], [32, 92], [35, 88], [35, 78], [33, 72], [30, 68]],
-      // Australia
-      [[-12, 130], [-14, 127], [-18, 122], [-22, 114], [-26, 113], [-30, 115], [-34, 117], [-37, 140], [-38, 145], [-38, 148], [-34, 151], [-28, 153], [-24, 150], [-20, 149], [-16, 145], [-14, 142], [-12, 136], [-12, 130]],
-      // Africa 
-      [[35, 10], [37, -1], [35, -5], [30, -10], [25, -16], [20, -17], [15, -17], [10, -14], [5, -8], [0, 9], [-5, 12], [-10, 14], [-15, 12], [-20, 15], [-25, 20], [-30, 27], [-34, 25], [-34, 28], [-28, 32], [-20, 35], [-10, 40], [-2, 42], [5, 50], [10, 51], [15, 50], [20, 42], [25, 36], [30, 32], [32, 30], [35, 10]],
-      // Europe
-      [[36, -5], [38, 0], [43, 3], [46, 7], [48, 2], [50, 5], [52, 8], [54, 10], [56, 12], [58, 15], [60, 20], [62, 28], [60, 30], [55, 28], [50, 30], [47, 25], [45, 22], [42, 20], [40, 18], [38, 15], [37, 12], [36, 10], [36, -5]],
-      // south  America
-      [[12, -72], [10, -75], [5, -77], [0, -80], [-5, -81], [-10, -78], [-15, -75], [-20, -63], [-25, -65], [-30, -70], [-35, -72], [-40, -68], [-45, -72], [-50, -74], [-54, -68], [-52, -60], [-45, -65], [-40, -62], [-35, -58], [-30, -50], [-25, -48], [-20, -40], [-15, -39], [-10, -37], [-5, -35], [0, -50], [5, -60], [8, -62], [10, -67], [12, -72]],
-      // North America
-      [[15, -90], [20, -100], [25, -110], [30, -118], [35, -120], [40, -124], [45, -124], [50, -128], [55, -130], [60, -140], [65, -165], [68, -165], [70, -155], [72, -130], [70, -90], [65, -75], [60, -65], [55, -60], [50, -55], [48, -63], [45, -65], [42, -70], [40, -75], [35, -80], [30, -85], [30, -82], [28, -80], [25, -80], [20, -90], [15, -90]],
-      // Japan/Korea
-      [[33, 130], [35, 133], [37, 137], [40, 140], [42, 143], [44, 145], [45, 142], [43, 140], [40, 138], [37, 135], [35, 130], [33, 130]],
-      // Indonesia/Philippines
-      [[-6, 105], [-7, 108], [-8, 112], [-8, 115], [-7, 118], [-5, 119], [-3, 117], [-2, 112], [-3, 108], [-5, 106], [-6, 105]],
-      [[5, 120], [7, 122], [10, 124], [15, 121], [18, 120], [14, 119], [10, 118], [7, 117], [5, 120]],
-    ];
+    // Earth geometry & materials
+    const earthGeo = new THREE.SphereGeometry(0.6, 64, 64);
+    const earthTexture = new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+    const earthBump = new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-topology.png');
+    const earthSpec = new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-water.png');
+    
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: earthTexture,
+      bumpMap: earthBump,
+      bumpScale: 0.015,
+      specularMap: earthSpec,
+      specular: new THREE.Color('grey'),
+      shininess: 15
+    });
+    const earth = new THREE.Mesh(earthGeo, earthMat);
+    scene.add(earth);
 
+    // Clouds
+    const cloudGeo = new THREE.SphereGeometry(0.61, 64, 64);
+    const cloudTexture = new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png');
+    const cloudMat = new THREE.MeshPhongMaterial({
+      map: cloudTexture,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide
+    });
+    const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+    scene.add(clouds);
+
+    // Atmosphere glow
+    const atmoGeo = new THREE.SphereGeometry(0.65, 64, 64);
+    const atmoMat = new THREE.MeshBasicMaterial({
+      color: 0x72a6ff,
+      transparent: true,
+      opacity: 0.1,
+      side: THREE.BackSide
+    });
+    const atmosphere = new THREE.Mesh(atmoGeo, atmoMat);
+    scene.add(atmosphere);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x333333, 0.4);
+    scene.add(ambientLight);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+    sunLight.position.set(5, 3, 5);
+    scene.add(sunLight);
+
+    // GPS marker (Cà Mau default)
+    const gpsMarkerGeo = new THREE.SphereGeometry(0.015, 8, 8);
+    const gpsMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+    window.gpsMarker = new THREE.Mesh(gpsMarkerGeo, gpsMat);
+    scene.add(window.gpsMarker);
+
+    // Camera position
+    camera.position.z = 1.7;
+
+    // Rotation & controls
+    let mouseDown = false, rotX = 0, rotY = 0, targetRotX = 0, targetRotY = 0;
+    const autoRotateSpeed = 0.0008;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Auto-rotate
+      targetRotY += autoRotateSpeed;
+
+      // Smooth rotation
+      rotY += (targetRotY - rotY) * 0.1;
+      rotX += (targetRotX - rotX) * 0.1;
+
+      earth.rotation.y = rotY;
+      earth.rotation.x = rotX * 0.3;
+      clouds.rotation.y = rotY + 0.002;
+      clouds.rotation.x = rotX * 0.3 + 0.001;
+      atmosphere.rotation.y = rotY;
+      atmosphere.rotation.x = rotX * 0.3;
+
+      renderer.render(scene, camera);
+    }
+
+    // Mouse controls
+    let prevMouse = { x: 0, y: 0 };
+    container.addEventListener('mousedown', (e) => {
+      mouseDown = true;
+      container.style.cursor = 'grabbing';
+      prevMouse = { x: e.clientX, y: e.clientY };
+    });
+    document.addEventListener('mouseup', () => {
+      mouseDown = false;
+      container.style.cursor = 'grab';
+    });
+    container.addEventListener('mousemove', (e) => {
+      if (!mouseDown) return;
+      const deltaX = e.clientX - prevMouse.x;
+      const deltaY = e.clientY - prevMouse.y;
+      targetRotY += deltaX * 0.01;
+      targetRotX += deltaY * 0.01;
+      prevMouse = { x: e.clientX, y: e.clientY };
+    });
+    container.addEventListener('touchstart', (e) => {
+      mouseDown = true;
+      container.style.cursor = 'grabbing';
+      if (e.touches.length > 0) {
+        prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    });
+    container.addEventListener('touchend', () => {
+      mouseDown = false;
+      container.style.cursor = 'grab';
+    });
+    container.addEventListener('touchmove', (e) => {
+      if (!mouseDown || e.touches.length === 0) return;
+      e.preventDefault();
+      const deltaX = e.touches[0].clientX - prevMouse.x;
+      const deltaY = e.touches[0].clientY - prevMouse.y;
+      targetRotY += deltaX * 0.01;
+      targetRotX += deltaY * 0.01;
+      prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    });
+
+    // Resize
     function resize() {
-      const heroCard = canvas.closest('.comp-hero') || canvas.parentElement;
-      const heroH = heroCard.offsetHeight || 400;
-      const parentW = canvas.parentElement.offsetWidth || 360;
-      const size = Math.min(parentW, heroH - 40, 400);
-      const finalSize = Math.max(size, 200);
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = finalSize * dpr;
-      canvas.height = finalSize * dpr;
-      canvas.style.width = finalSize + 'px';
-      canvas.style.height = finalSize + 'px';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      W = finalSize;
-      H = finalSize;
-      R = finalSize * 0.42;
-      cx = finalSize / 2;
-      cy = finalSize / 2;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
     }
-
-    function project(latDeg, lonDeg) {
-      const lat = latDeg * Math.PI / 180;
-      const lon = lonDeg * Math.PI / 180 + rotation;
-      const x3d = Math.cos(lat) * Math.sin(lon);
-      const y3d = -Math.sin(lat);
-      const z3d = Math.cos(lat) * Math.cos(lon);
-      if (z3d < -0.05) return null;
-      return { x: cx + x3d * R, y: cy + y3d * R, z: z3d };
-    }
-
-    function drawFrame() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const atmoGrad = ctx.createRadialGradient(cx, cy, R * 0.85, cx, cy, R * 1.3);
-      atmoGrad.addColorStop(0, 'rgba(59,158,255,0)');
-      atmoGrad.addColorStop(0.5, 'rgba(59,158,255,0.06)');
-      atmoGrad.addColorStop(0.8, 'rgba(59,158,255,0.03)');
-      atmoGrad.addColorStop(1, 'rgba(59,158,255,0)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * 1.3, 0, Math.PI * 2);
-      ctx.fillStyle = atmoGrad;
-      ctx.fill();
-
-      const oceanGrad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, 0, cx, cy, R);
-      oceanGrad.addColorStop(0, 'rgba(30,85,170,0.95)');
-      oceanGrad.addColorStop(0.5, 'rgba(15,50,120,0.9)');
-      oceanGrad.addColorStop(1, 'rgba(8,28,70,0.85)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.fillStyle = oceanGrad;
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(59,158,255,0.1)';
-      ctx.lineWidth = 0.5;
-
-      for (let lat = -60; lat <= 60; lat += 30) {
-        ctx.beginPath();
-        let started = false;
-        for (let lon = -180; lon <= 180; lon += 3) {
-          const p = project(lat, lon);
-          if (p) {
-            if (!started) { ctx.moveTo(p.x, p.y); started = true; }
-            else ctx.lineTo(p.x, p.y);
-          } else { started = false; }
-        }
-        ctx.stroke();
-      }
-
-      for (let lon = -180; lon < 180; lon += 30) {
-        ctx.beginPath();
-        let started = false;
-        for (let lat = -90; lat <= 90; lat += 3) {
-          const p = project(lat, lon);
-          if (p) {
-            if (!started) { ctx.moveTo(p.x, p.y); started = true; }
-            else ctx.lineTo(p.x, p.y);
-          } else { started = false; }
-        }
-        ctx.stroke();
-      }
-
-      CONTINENTS.forEach(continent => {
-        ctx.beginPath();
-        let started = false;
-        let visible = false;
-        continent.forEach(([lat, lon]) => {
-          const p = project(lat, lon);
-          if (p) {
-            if (!started) { ctx.moveTo(p.x, p.y); started = true; }
-            else ctx.lineTo(p.x, p.y);
-            visible = true;
-          } else { started = false; }
-        });
-        if (visible) {
-          ctx.closePath();
-          const depth = 0.6 + Math.sin(rotation * 0.5) * 0.1;
-          ctx.fillStyle = `rgba(60,180,100,${0.35 * depth})`;
-          ctx.fill();
-          ctx.strokeStyle = `rgba(80,210,120,${0.4 * depth})`;
-          ctx.lineWidth = 0.8;
-          ctx.stroke();
-        }
-      });
-
-      const cloudAlpha = 0.12;
-      for (let i = 0; i < 8; i++) {
-        const cLat = Math.sin(i * 1.7 + Date.now() * 0.00002) * 50;
-        const cLon = (i * 47 + Date.now() * 0.008) % 360 - 180;
-        const p = project(cLat, cLon);
-        if (p && p.z > 0.1) {
-          const cloudR = R * (0.06 + Math.sin(i * 2.3) * 0.03);
-          const cg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, cloudR);
-          cg.addColorStop(0, `rgba(255,255,255,${cloudAlpha * p.z})`);
-          cg.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, cloudR, 0, Math.PI * 2);
-          ctx.fillStyle = cg;
-          ctx.fill();
-        }
-      }
-
-      const cmLatDeg = 9.18, cmLonDeg = 105.15;
-      const cm = project(cmLatDeg, cmLonDeg);
-      if (cm && cm.z > 0) {
-        const pulse = 1 + Math.sin(Date.now() * 0.004) * 0.3;
-
-        const mg = ctx.createRadialGradient(cm.x, cm.y, 0, cm.x, cm.y, 12 * pulse);
-        mg.addColorStop(0, 'rgba(255,100,50,0.6)');
-        mg.addColorStop(0.5, 'rgba(255,100,50,0.2)');
-        mg.addColorStop(1, 'rgba(255,100,50,0)');
-        ctx.beginPath();
-        ctx.arc(cm.x, cm.y, 12 * pulse, 0, Math.PI * 2);
-        ctx.fillStyle = mg;
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.arc(cm.x, cm.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#ff6432';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        if (cm.z > 0.3) {
-          ctx.font = 'bold 10px "DM Sans", system-ui';
-          ctx.fillStyle = 'rgba(255,255,255,0.85)';
-          ctx.textAlign = 'left';
-          ctx.fillText('Cà Mau', cm.x + 10, cm.y - 4);
-          ctx.font = '8px "DM Sans", system-ui';
-          ctx.fillStyle = 'rgba(255,255,255,0.5)';
-          ctx.fillText('9.18°N, 105.15°E', cm.x + 10, cm.y + 7);
-        }
-      }
-
-      const specGrad = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.35, 0, cx, cy, R);
-      specGrad.addColorStop(0, 'rgba(255,255,255,0.12)');
-      specGrad.addColorStop(0.4, 'rgba(255,255,255,0.03)');
-      specGrad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.fillStyle = specGrad;
-      ctx.fill();
-
-      const edgeGrad = ctx.createRadialGradient(cx, cy, R * 0.88, cx, cy, R * 1.02);
-      edgeGrad.addColorStop(0, 'rgba(59,158,255,0)');
-      edgeGrad.addColorStop(0.7, 'rgba(59,158,255,0.15)');
-      edgeGrad.addColorStop(1, 'rgba(59,158,255,0.05)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * 1.02, 0, Math.PI * 2);
-      ctx.fillStyle = edgeGrad;
-      ctx.fill();
-
-      rotation += ROTATION_SPEED;
-      requestAnimationFrame(drawFrame);
-    }
-
-    resize();
-    drawFrame();
     window.addEventListener('resize', resize);
+
+    // Update GPS marker
+    window.updateGPSMarker = (lat = 9.18, lon = 105.15) => {
+      const phi = (90 - lat) * Math.PI / 180;
+      const theta = (lon + 180) * Math.PI / 180;
+      window.gpsMarker.position.set(
+        0.61 * Math.sin(phi) * Math.cos(theta),
+        0.61 * Math.cos(phi),
+        0.61 * Math.sin(phi) * Math.sin(theta)
+      );
+    };
+    window.updateGPSMarker();
+
+    animate();
+    resize();
   }
+
+  function initThemeToggle() {
+    const themeBtn = $('themeBtn');
+    const themeDropdown = $('themeDropdown');
+    const root = document.documentElement;
+    if (!themeBtn || !themeDropdown) return;
+
+    const savedTheme = localStorage.getItem('rt_theme') || 'dark';
+    setTheme(savedTheme);
+
+    themeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const expanded = themeBtn.getAttribute('aria-expanded') === 'true';
+      themeBtn.setAttribute('aria-expanded', !expanded);
+      themeDropdown.classList.toggle('show');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!themeBtn.contains(e.target) && !themeDropdown.contains(e.target)) {
+        themeBtn.setAttribute('aria-expanded', 'false');
+        themeDropdown.classList.remove('show');
+      }
+    });
+
+    themeDropdown.querySelectorAll('.theme-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        const theme = e.currentTarget.dataset.t;
+        setTheme(theme);
+        themeBtn.setAttribute('aria-expanded', 'false');
+        themeDropdown.classList.remove('show');
+      });
+    });
+
+    function setTheme(t) {
+      root.setAttribute('data-theme', t);
+      localStorage.setItem('rt_theme', t);
+      
+      const themeIcons = { 'dark': '🌙', 'light': '☀️', 'ocean': '🌊' };
+      const icon = $('themeIcon');
+      if (icon) icon.textContent = themeIcons[t] || '🌙';
+
+      themeDropdown.querySelectorAll('.theme-item').forEach(btn => {
+        if (btn.dataset.t === t) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+    }
+  }
+
   async function init() {
+    initThemeToggle();
     injectCSS();
     injectHTML();
     patchSelectWard();

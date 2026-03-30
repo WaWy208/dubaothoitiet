@@ -53,8 +53,9 @@ def fetch_point(lat: float, lon: float) -> Dict[str, Any]:
         resp = requests.get(url, params=params, timeout=10)
         resp.raise_for_status()
         d = resp.json()
-        w = d["weather"][0]
-        m = d["main"]
+        weather_list = d.get("weather", [{}])
+        w = weather_list[0] if weather_list else {}
+        m = d.get("main", {})
         wind = d.get("wind", {})
         rain = d.get("rain", {})
         rain_mm = rain.get("1h") or rain.get("3h") or 0
@@ -102,7 +103,11 @@ def main() -> None:
         if lat is None or lon is None:
             results.append({**w, "label": label, "error": "missing lat/lon"})
             continue
-        res = fetch_point(float(lat), float(lon))
+        try:
+            res = fetch_point(float(lat), float(lon))
+        except ValueError:
+            res = {"error": f"invalid lat/lon: {lat}, {lon}"}
+            
         res.update({"id": w.get("id"), "name": w.get("name"), "district": w.get("district"), "label": label})
         results.append(res)
         if idx < len(wards):
