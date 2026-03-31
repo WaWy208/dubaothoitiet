@@ -13,12 +13,8 @@
     rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
   <div class="page-bg" aria-hidden="true"></div>
-
-  <!-- Search Overlay -->
   <div class="search-overlay comp-overlay" id="searchOverlay" role="dialog" aria-modal="true"
     aria-labelledby="searchTitle">
     <div class="search-panel comp-panel">
@@ -114,12 +110,12 @@
         <div class="theme-wrap comp-theme">
           <button type="button" class="btn-ghost" id="themeBtn" title="Giao diện" aria-haspopup="true"
             aria-expanded="false">
-            <span id="themeIcon">🌙</span> Giao diện
+            Giao diện
           </button>
           <div class="theme-menu comp-theme__menu" id="themeDropdown" role="menu">
-            <button type="button" class="theme-item active" data-t="dark" role="menuitem">🌙 Tối chuyên nghiệp</button>
-            <button type="button" class="theme-item" data-t="light" role="menuitem">☀️ Sáng tối giản</button>
-            <button type="button" class="theme-item" data-t="ocean" role="menuitem">🌊 Xanh đại dương</button>
+            <button type="button" class="theme-item active" data-t="dark" role="menuitem"> Tối chuyên nghiệp</button>
+            <button type="button" class="theme-item" data-t="light" role="menuitem"> Sáng tối giản</button>
+            <button type="button" class="theme-item" data-t="ocean" role="menuitem"> Xanh đại dương</button>
           </div>
         </div>
         <div class="sync-pill" title="Thời điểm cập nhật giao diện">
@@ -128,19 +124,8 @@
         </div>
       </div>
     </header>
-
-    <!-- Smart Alerts Container -->
     <div class="alerts-container" id="alertsContainer"></div>
-
-    <!-- GPS Coordinates Bar -->
-    <div class="gps-bar" id="gpsBar">
-      <span class="gps-bar__icon">📍</span>
-      <span class="gps-bar__text" id="gpsBarText">Đang xác định vị trí GPS...</span>
-      <span class="gps-bar__accuracy" id="gpsBarAccuracy"></span>
-    </div>
-
     <main class="main-flow comp-main">
-      <!-- Hero -->
       <section class="card hero-card comp-hero" aria-labelledby="heroCity">
         <div class="comp-hero__grid hero-grid">
           <div class="hero-main comp-hero__primary">
@@ -153,12 +138,7 @@
               <span class="pill pill-warm">Cao <strong id="hiTemp">—</strong>°</span>
               <span class="pill pill-cool">Thấp <strong id="loTemp">—</strong>°</span>
             </div>
-            <div class="hero-actions">
-              <button type="button" class="btn-primary comp-hero__refresh" id="refreshBtn">
-                <span class="btn-primary__icon" aria-hidden="true">↻</span>
-                Làm mới dữ liệu
-              </button>
-            </div>
+
           </div>
           <div class="hero-aside comp-hero__visual">
             <div class="condition-block comp-condition">
@@ -171,8 +151,6 @@
           </div>
         </div>
       </section>
-
-      <!-- Metrics -->
       <section class="metrics comp-metrics" aria-label="Chỉ số hiện tại">
         <article class="metric-card comp-metric">
           <div class="comp-metric__icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -437,24 +415,22 @@
         </div>
       </section>
 
-      <!-- Hydro Stations -->
       <section class="block comp-section" id="hydroSection">
         <header class="block-head comp-section__head">
-          <h2 class="block-title comp-section__title">Trạm quan trắc thủy văn</h2>
+          <h2 class="block-title comp-section__title">Trạm thủy văn</h2>
           <p class="block-sub comp-section__sub" id="hydroSubtitle">Dữ liệu từ GPS — sắp xếp theo khoảng cách</p>
         </header>
         <div class="hydro-grid" id="hydroGrid">
-          <div class="comp-loading" style="grid-column:1/-1;text-align:center;padding:32px">Đang tải dữ liệu trạm…</div>
+          <div class="comp-loading" style=>Đang tải dữ liệu trạm…</div>
         </div>
       </section>
 
       <footer class="site-footer">
-        <p id="footerCoords">9°10′B, 105°9′Đ · GMT+7</p>
+        <p id="footerCoords">Bùi Quang Quí - 12C5 THPT Ngan Dừa</p>
         <p id="footerTime"></p>
       </footer>
     </main>
   </div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="script.js"></script>
 

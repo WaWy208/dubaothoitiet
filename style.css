@@ -1790,7 +1790,11 @@ body {
   background: var(--surface); color: var(--muted); font-size: 18px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
-.smart-alert__close:hover { background: var(--surface-hover); color: var(--text); }
+.smart-alert__close:hover { background:var(--surface-hover); color:var(--text); }
+
+.smart-alert--uv { border-color: rgba(240,160,75,0.4); background: linear-gradient(135deg, rgba(240,160,75,0.08), rgba(248,113,113,0.04)); }
+.smart-alert--uv .smart-alert__title { color: #fde68a; }
+.smart-alert--uv .smart-alert__icon { filter: drop-shadow(0 0 8px rgba(255,193,7,0.6)); }
 
 /* ═══ Sun/Tide/Moon ═══ */
 .sun-tide-grid {

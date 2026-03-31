@@ -19,7 +19,8 @@
     leafletMap: null, radarLayer: null, _marker: null,
     currentMapLayer: 'precipitation_new',
     dismissedAlerts: new Set(),
-    unit: () => (document.getElementById('unitToggle')?.textContent?.includes('F') ? 'F' : 'C'),
+    isFahrenheit: localStorage.getItem('weatherUnit') === 'F',
+    unit: () => RT.isFahrenheit ? 'F' : 'C',
     dispT: (c) => RT.unit() === 'F' ? Math.round(c * 9 / 5 + 32) : Math.round(c),
   };
   const $ = (id) => document.getElementById(id);
@@ -508,12 +509,14 @@
     const uvLabels = ['Thấp', 'Thấp', 'Thấp', 'Trung bình', 'Trung bình', 'Trung bình',
       'Cao', 'Cao', 'Rất cao', 'Rất cao', 'Rất cao', 'Cực đoan'];
     const uvCls = ['accent-ok', 'accent-ok', 'accent-ok', '', '', '', 'accent-warm',
-      'accent-warm', '', '', '', 'accent-danger'];
+      'accent-warm', 'accent-danger', 'accent-danger', 'accent-danger', 'accent-danger'];
     setTxt('detailUv', uvi);
-    setTxt('detailUvNote',
-      `${uvLabels[uvi]} — ${uvi > 5 ? 'Cần kem chống nắng' : uvi > 2 ? 'Đề phòng' : 'An toàn'}`);
+
     const uvEl = $('detailUv');
     if (uvEl) uvEl.className = `detail-stat ${uvCls[uvi]}`;
+
+    // Trigger UV alert check
+    checkUVAlert(uvi);
 
     if (aqi?.list?.[0]) {
       const comp = aqi.list[0].components || {};
@@ -568,7 +571,7 @@
     if (arcPath) arcPath.style.strokeDashoffset = (480 * (1 - pct)).toFixed(0);
   }
 
-  function checkExtremeAlert() {
+function checkExtremeAlert() {
     const d = RT.current;
     if (!d) return;
     const code = d.weather?.[0]?.id ?? 800;
@@ -579,21 +582,21 @@
     const alerts = [];
     if (code >= 200 && code < 300)
       alerts.push({
-        lvl: 'danger', title: '⛈️ Dông sét đang hoạt động',
+        lvl: 'danger', title: ' Dông sét đang hoạt động',
         body: `${d.weather[0].description} – Tránh xa cây lớn và khu vực trống trải.`
       });
     if (wind > 60)
-      alerts.push({ lvl: 'danger', title: '🌀 Gió bão', body: `Gió ${wind} km/h – Nguy hiểm tàu thuyền!` });
+      alerts.push({ lvl: 'danger', title: ' Gió bão', body: `Gió ${wind} km/h – Nguy hiểm tàu thuyền!` });
     else if (wind > 40)
-      alerts.push({ lvl: 'warn', title: '💨 Gió mạnh', body: `Gió ${wind} km/h – Thận trọng khi ra biển.` });
+      alerts.push({ lvl: 'warn', title: ' Gió mạnh', body: `Gió ${wind} km/h – Thận trọng khi ra biển.` });
     if (rain > 20)
       alerts.push({
-        lvl: 'warn', title: '🌧️ Mưa lớn',
+        lvl: 'warn', title: ' Mưa lớn',
         body: `${rain.toFixed(1)} mm/h – Cảnh báo ngập úng cục bộ.`
       });
     if (temp > 38)
       alerts.push({
-        lvl: 'warn', title: '🌡️ Nắng nóng gay gắt',
+        lvl: 'warn', title: ' Nắng nóng gay gắt',
         body: `${Math.round(temp)}°C – Hạn chế hoạt động ngoài trời 10:00–16:00.`
       });
 
@@ -601,6 +604,52 @@
     const key = alerts.map(a => a.title).join('|');
     if (RT.dismissedAlerts.has(key)) return;
     showAlertPopup(alerts[0], key);
+  }
+
+function checkUVAlert(uvi) {
+    if (uvi < 6) return;
+
+    const hr = new Date().getHours();
+    const sunnyHours = hr >= 9 && hr <= 16;
+    let advice = 'Bôi kem chống nắng SPF 30+ ';
+    if (sunnyHours) {
+      advice += ' hoặc mặc áo khoác/áo chống nắng';
+    }
+
+    const uvLabels = ['Thấp', 'Thấp', 'Thấp', 'Trung bình', 'Trung bình', 'Trung bình',
+      'Cao', 'Cao', 'Rất cao', 'Rất cao', 'Rất cao', 'Cực đoan'];
+    const uvLevel = uvLabels[uvi] || 'Cao';
+
+    const key = `uv-${uvi}-${Math.round(RT.lat * 100)}-${Math.round(RT.lon * 100)}`;
+    if (RT.dismissedAlerts.has(key)) return;
+
+    // Top banner
+    const alertsCont = $('alertsContainer');
+    if (alertsCont && !alertsCont.querySelector('.smart-alert--uv')) {
+      const banner = document.createElement('div');
+      banner.className = 'smart-alert smart-alert--warn smart-alert--uv';
+      banner.innerHTML = `
+        <span class="smart-alert__icon"></span>
+        <div class="smart-alert__body">
+          <div class="smart-alert__title">Cảnh báo UV cao ${uvi}</div>
+          <div class="smart-alert__text">${uvLevel} - ${advice}</div>
+        </div>
+        <button class="smart-alert__close" onclick="this.parentElement.remove(); RT.dismissedAlerts.add('${key}'); RT.uvDismissed = true;">×</button>
+      `;
+      alertsCont.appendChild(banner);
+      // Auto-dismiss after 30s
+      setTimeout(() => {
+        if (banner.parentNode) banner.remove();
+        RT.dismissedAlerts.add(key);
+      }, 30000);
+    }
+
+    // Popup
+    showAlertPopup({
+      lvl: sunnyHours ? 'warn' : 'info',
+      title: `☀️ UV ${uvi} - ${uvLevel}`,
+      body: advice
+    }, key);
   }
 
   function showAlertPopup({ lvl, title, body }, key) {
@@ -813,7 +862,8 @@
       renderHourly();
       renderDailyChart();
       renderForecast7Day();
-      renderDetails();
+    renderDetails();
+    checkExtremeAlert();
       buildHistory();
 
       if (typeof window.renderForecastHome === 'function') window.renderForecastHome();
@@ -941,14 +991,8 @@
         <span id="rt-last-refresh" class="rt-live-clock">—</span>`;
       footer.prepend(div);
     }
-    if (footer && !$('rt-export-btn')) {
-      const btn = Object.assign(document.createElement('button'), {
-        id: 'rt-export-btn', className: 'link-btn', textContent: '📥 Tải dữ liệu CSV',
-      });
-      btn.style.marginLeft = '14px';
-      btn.addEventListener('click', exportCSV);
-      footer.appendChild(btn);
-    }
+
+
   }
 
   function injectCSS() {
@@ -1100,7 +1144,6 @@
   }
   window.AeroCastRT = {
     refresh: refreshAll,
-    exportCSV,
     setLocation: (lat, lon, name) => { setLocation(lat, lon, name); refreshAll(); },
     getState: () => RT,
   };
@@ -1834,6 +1877,29 @@
     resize();
   }
 
+  function initUnitToggle() {
+    const toggleBtn = $('unitToggle');
+    if (!toggleBtn) return;
+
+    function updateToggleDisplay() {
+      const unit = RT.unit();
+      toggleBtn.textContent = unit;
+      const label = $('tempUnitLabel');
+      if (label) label.textContent = unit;
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      RT.isFahrenheit = !RT.isFahrenheit;
+      localStorage.setItem('weatherUnit', RT.unit());
+      updateToggleDisplay();
+      toast(`🌡️ Chuyển sang ${RT.unit()}`, 'success');
+      refreshAll(); // Re-render all displays with new unit
+    });
+
+    // Initialize display
+    updateToggleDisplay();
+  }
+
   function initThemeToggle() {
     const themeBtn = $('themeBtn');
     const themeDropdown = $('themeDropdown');
@@ -1870,9 +1936,9 @@
       root.setAttribute('data-theme', t);
       localStorage.setItem('rt_theme', t);
       
-      const themeIcons = { 'dark': '🌙', 'light': '☀️', 'ocean': '🌊' };
+      // Icon removed per request
       const icon = $('themeIcon');
-      if (icon) icon.textContent = themeIcons[t] || '🌙';
+      if (icon) icon.textContent = '';
 
       themeDropdown.querySelectorAll('.theme-item').forEach(btn => {
         if (btn.dataset.t === t) btn.classList.add('active');
@@ -1882,6 +1948,7 @@
   }
 
   async function init() {
+    initUnitToggle();
     initThemeToggle();
     injectCSS();
     injectHTML();
@@ -1930,7 +1997,7 @@
     const cc = $('comparisonChart');
     if (cc) ro.observe(cc);
 
-    console.log('✅ AeroCast Real-Time Engine v3.0 — sẵn sàng (Cà Mau mới + cũ)');
+    console.log('✅ AeroCast Real-Time Engine v3.0 — sẵn sàng (Cà Mau mới + cũ). °C/°F toggle restored!');
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
