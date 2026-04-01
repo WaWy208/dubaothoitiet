@@ -1,6 +1,5 @@
 (function () {
   'use strict';
-
   const OWM_KEY = '7f318ae139397881686e5acd8dce296c';
   const OWM_BASE = 'https://api.openweathermap.org/data/2.5';
   const OWM_TILE = (layer) =>
@@ -10,7 +9,6 @@
   const DEFAULT_LAT = 9.1769;
   const DEFAULT_LON = 105.1505;
   const DEFAULT_NAME = 'TP. Cà Mau';
-
   const RT = {
     lat: DEFAULT_LAT, lon: DEFAULT_LON, name: DEFAULT_NAME,
     current: null, forecast: null, airPollution: null, history: [],
@@ -25,9 +23,7 @@
   };
   const $ = (id) => document.getElementById(id);
   const qs = (sel) => document.querySelector(sel);
-
   function weatherEmoji(code) {
-    if (!code) return '🌤️';
     if (code < 300) return '⛈️';
     if (code < 600) return '🌧️';
     if (code < 700) return '❄️';
@@ -81,7 +77,6 @@
     if (!r.ok) throw new Error(`OWM ${path} HTTP ${r.status}`);
     return r.json();
   }
-
   async function fetchAll() {
     const [cur, fc5, aqi] = await Promise.allSettled([
       owmGet('/weather'),
@@ -93,7 +88,6 @@
     RT.forecast = fc5.status === 'fulfilled' ? fc5.value : null;
     RT.airPollution = aqi.status === 'fulfilled' ? aqi.value : null;
   }
-
   function haversine(la1, lo1, la2, lo2) {
     const R = 6371, d2r = Math.PI / 180;
     const dLa = (la2 - la1) * d2r, dLo = (lo2 - lo1) * d2r;
@@ -101,7 +95,6 @@
       + Math.cos(la1 * d2r) * Math.cos(la2 * d2r) * Math.sin(dLo / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
-
   function nearestWard(lat, lon) {
     const coords = window.WARDS_COORDS || [];
     const wards = window.WARDS || [];
@@ -114,7 +107,6 @@
     const ward = wards.find(w => w.id === best.id) || wards[0];
     return { ward, dist: bestDist, coord: best };
   }
-
   function setLocation(lat, lon, name) {
     RT.lat = lat;
     RT.lon = lon;
@@ -124,24 +116,31 @@
       RT.leafletMap.panTo([lat, lon], { animate: true });
     }
     if (window.updateGPSMarker) window.updateGPSMarker(lat, lon);
+    const fc = $('footerCoords');
+    if (fc) fc.textContent = ` GPS: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
   }
 
-  function initGPSButton() {
+  function triggerGPS(isAuto = false) {
     const btn = $('gpsBtn');
-    if (!btn) return;
-    const nb = btn.cloneNode(true);
-    btn.parentNode.replaceChild(nb, btn);
+    if (!navigator.geolocation) {
+      if (!isAuto) toast('Trình duyệt không hỗ trợ GPS', 'warn');
+      return Promise.resolve(false);
+    }
 
-    nb.addEventListener('click', () => {
-      if (!navigator.geolocation) { toast('Trình duyệt không hỗ trợ GPS', 'warn'); return; }
-      nb.disabled = true;
+    if (btn) {
+      btn.disabled = true;
       const svgSpin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" stroke-width="2" style="animation:rt-spin 1s linear infinite">
         <path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
-      nb.innerHTML = `${svgSpin}<span>GPS…</span>`;
+      btn.innerHTML = `${svgSpin}<span>GPS…</span>`;
+    }
 
+    const hourlyWrap = qs('.hourly-track-wrap');
+    if (hourlyWrap) hourlyWrap.classList.add('is-refreshing');
+
+    return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const { latitude: la, longitude: lo, accuracy: acc } = pos.coords;
           const result = nearestWard(la, lo);
           const ward = result?.ward;
@@ -155,31 +154,161 @@
             setLocation(la, lo, `${la.toFixed(3)}°N`);
           }
 
-          nb.disabled = false;
-          nb.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
-            <path d="M2 12h20"/><path d="M12 2v20"/></svg><span>GPS</span>`;
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20"/><path d="M12 2v20"/></svg><span>GPS</span>`;
+          }
 
           const distTxt = result?.dist < 50
             ? `${(result.dist * 1000).toFixed(0)}m`
             : `${result?.dist?.toFixed(1)}km`;
           toast(`📍 ${ward?.name || 'Vị trí GPS'} · ±${Math.round(acc)}m · ${distTxt} từ trung tâm xã`, 'success');
-          refreshAll();
+          
+          await refreshAll();
+          if (hourlyWrap) hourlyWrap.classList.remove('is-refreshing');
+          resolve(true);
         },
         (err) => {
-          nb.disabled = false;
-          nb.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
-            <path d="M2 12h20"/><path d="M12 2v20"/></svg><span>GPS</span>`;
+          if (hourlyWrap) hourlyWrap.classList.remove('is-refreshing');
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20"/><path d="M12 2v20"/></svg><span>GPS</span>`;
+          }
           const msgs = { 1: 'GPS bị từ chối quyền truy cập', 2: 'Không tìm thấy vị trí', 3: 'GPS timeout' };
-          toast(msgs[err.code] || 'Lỗi GPS', 'warn');
+          if (!isAuto) toast(msgs[err.code] || 'Lỗi GPS', 'warn');
+          resolve(false);
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
       );
     });
   }
 
+  function initGPSButton() {
+    const btn = $('gpsBtn');
+    if (!btn) return;
+    const nb = btn.cloneNode(true);
+    btn.parentNode.replaceChild(nb, btn);
+    nb.addEventListener('click', () => triggerGPS(false));
+  }
+
+  function renderMoon() {
+    const now = new Date();
+    const refNewMoon = new Date('2024-02-09T22:59:00Z');
+    const lunCycle = 29.530588853;
+    const diffDays = (now - refNewMoon) / (1000 * 60 * 60 * 24);
+    const age = diffDays % lunCycle;
+    const illum = 50 * (1 - Math.cos((2 * Math.PI * age) / lunCycle));
+
+    let phase = 'Trăng mới', icon = '🌑';
+    if (age < 1.1) { phase = 'Trăng mới'; icon = '🌑'; }
+    else if (age < 6.4) { phase = 'Trăng khuyết đầu tháng'; icon = '🌒'; }
+    else if (age < 8.4) { phase = 'Trăng thượng huyền'; icon = '🌓'; }
+    else if (age < 13.7) { phase = 'Trăng lồi đầu tháng'; icon = '🌔'; }
+    else if (age < 15.8) { phase = 'Trăng tròn'; icon = '🌕'; }
+    else if (age < 21.1) { phase = 'Trăng lồi cuối tháng'; icon = '🌖'; }
+    else if (age < 23.1) { phase = 'Trăng hạ huyền'; icon = '🌗'; }
+    else if (age < 28.4) { phase = 'Trăng khuyết cuối tháng'; icon = '🌘'; }
+    else { phase = 'Trăng mới'; icon = '🌑'; }
+
+    setTxt('moonAge', age.toFixed(1));
+    setTxt('moonIllum', Math.round(illum) + '%');
+    setTxt('moonPhaseName', phase);
+    setTxt('moonPhaseVisual', icon);
+
+    const sr = new Date(RT.current?.sys?.sunrise * 1000 || Date.now());
+    const ss = new Date(RT.current?.sys?.sunset * 1000 || Date.now() + 12 * 3600 * 1000);
+    const mRise = new Date(sr.getTime() + (age / lunCycle) * 24 * 3600 * 1000);
+    const mSet = new Date(mRise.getTime() + 12 * 3600 * 1000);
+    const fmt = d => d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    setTxt('moonRise', fmt(mRise));
+    setTxt('moonSetTime', fmt(mSet));
+  }
+
+  function renderTide() {
+    const canvas = $('tideChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth || 600;
+    const H = 100;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
+
+    const now = new Date();
+    const hrCurrent = now.getHours() + now.getMinutes() / 60;
+    const points = [];
+    const schedule = [];
+
+    const moonAge = ( (now - new Date('2024-02-09')) / (1000*3600*24) % 29.53 );
+    const moonOffset = (moonAge / 29.53) * 2 * Math.PI;
+
+    const lon = RT.lon || 105.15;
+    const lat = RT.lat || 9.17;
+    const spatialPhase = (lon - 105.15) * 1.5;
+    const diurnalWeight = Math.max(0, Math.min(1, (105.5 - lon) / 1.0));
+
+    for (let h = 0; h <= 24; h += 0.5) {
+      const t = h;
+      const tidalDay = 24.84;
+
+      const m2 = 0.5 * Math.sin(2 * Math.PI * (t / 12.42) - moonOffset - spatialPhase);
+      const k1 = 0.4 * Math.sin(2 * Math.PI * (t / 24.0) - moonOffset/2 - spatialPhase/2);
+      const height = (1 - diurnalWeight) * m2 + diurnalWeight * k1 + 1.2;
+
+      points.push({ x: (h / 24) * W, y: H - (height / 2.5) * H });
+
+      if (h > 0 && h < 24) {
+        const prevH = height;
+        const nextH = (1 - diurnalWeight) * (0.5 * Math.sin(2 * Math.PI * ((h+0.1) / 12.42) - moonOffset - spatialPhase))
+                    + diurnalWeight * (0.4 * Math.sin(2 * Math.PI * ((h+0.1) / 24.0) - moonOffset/2 - spatialPhase/2)) + 1.2;
+        const lastH = (1 - diurnalWeight) * (0.5 * Math.sin(2 * Math.PI * ((h-0.1) / 12.42) - moonOffset - spatialPhase))
+                    + diurnalWeight * (0.4 * Math.sin(2 * Math.PI * ((h-0.1) / 24.0) - moonOffset/2 - spatialPhase/2)) + 1.2;
+
+        if ((prevH > lastH && prevH > nextH) || (prevH < lastH && prevH < nextH)) {
+          const type = prevH > lastH ? 'Lớn' : 'Ròng';
+          const time = new Date(now); time.setHours(Math.floor(h), (h % 1) * 60);
+          schedule.push({ type, time, h: prevH });
+        }
+      }
+    }
+
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)');
+    grad.addColorStop(1, 'rgba(56, 189, 248, 0.05)');
+    ctx.beginPath(); ctx.moveTo(0, H);
+    points.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+    ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+    points.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5; ctx.stroke();
+
+    const curX = (hrCurrent / 24) * W;
+    ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(curX, 0); ctx.lineTo(curX, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.stroke(); ctx.setLineDash([]);
+
+    const schedEl = $('tideSchedule');
+    if (schedEl) {
+      schedEl.innerHTML = `
+      ` + schedule.sort((a,b) => a.time - b.time).map(s => `
+        <div class="tide-item">
+          <span class="tide-type ${s.type === 'Lớn' ? 'tide-high' : 'tide-low'}">${s.type === 'Lớn' ? '▲ Nước lớn' : '▼ Nước ròng'}</span>
+          <span class="tide-time">${s.time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+          <span class="tide-height">${s.h.toFixed(2)}m</span>
+        </div>
+      `).join('');
+    }
+  }
+
+
   function renderHero() {
+    renderMoon();
+    renderTide();
     const d = RT.current;
     if (!d) return;
 
@@ -290,48 +419,76 @@
 
     checkExtremeAlert();
   }
+  function getInterpolated24h() {
+    const list = RT.forecast?.list;
+    if (!list || list.length < 2) return [];
+    const points = [];
+    const now = list[0].dt;
+    for (let h = 0; h < 24; h++) {
+      const targetDt = now + h * 3600;
+      let left = list[0], right = list[0];
+      for (let i = 0; i < list.length - 1; i++) {
+        if (list[i].dt <= targetDt && list[i + 1].dt >= targetDt) {
+          left = list[i]; right = list[i + 1]; break;
+        }
+      }
+      const p = left.dt === right.dt ? 0 : (targetDt - left.dt) / (right.dt - left.dt);
+      points.push({
+        dt: targetDt,
+        temp: left.main.temp + (right.main.temp - left.main.temp) * p,
+        pop: left.pop + (right.pop - left.pop) * p,
+        wind: left.wind.speed + (right.wind.speed - left.wind.speed) * p,
+        weather: p < 0.5 ? left.weather[0] : right.weather[0]
+      });
+    }
+    return points;
+  }
+
   function renderHourly() {
-    const fc = RT.forecast;
-    if (!fc?.list) return;
-    const items = fc.list.slice(0, 8);
+    const items = getInterpolated24h();
+    if (!items.length) return;
     const track = $('hourlyTrack');
     if (!track) return;
 
     track.innerHTML = items.map((item, i) => {
       const dt = new Date(item.dt * 1000);
-      const t = i === 0
-        ? 'Bây giờ'
-        : dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      const temp = RT.dispT(item.main.temp);
+      const t = i === 0 ? 'Bây giờ' : dt.getHours() + ':00';
+      const tempC = item.temp;
+      const temp = RT.dispT(tempC);
       const rain = Math.round((item.pop || 0) * 100);
-      const icon = weatherEmoji(item.weather?.[0]?.id);
-      const wind = mps2kmh(item.wind?.speed || 0);
-      return `<div class="hour-card${i === 0 ? ' active' : ''}">
-        <div class="hour-time">${t}</div>
-        <span class="hour-icon">${icon}</span>
-        <div class="hour-temp">${temp}°</div>
-        <div class="hour-wind">${wind}<span style="font-size:9px">km/h</span></div>
-        <div class="hour-rain"><span class="hour-rain-label">💧</span>${rain}%</div>
-        <div class="rain-bar"><div class="rain-fill" style="width:${rain}%"></div></div>
-      </div>`;
-    }).join('');
+      const icon = weatherEmoji(item.weather?.id);
+      
+      let tCls = 'h-warm';
+      if (tempC < 25) tCls = 'h-cool';
+      else if (tempC >= 30) tCls = 'h-hot';
 
-    if (window.HOURS) {
-      items.forEach((item, i) => {
-        if (!window.HOURS[i]) return;
-        const dt = new Date(item.dt * 1000);
-        window.HOURS[i].t = i === 0 ? 'Bây giờ'
-          : dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-        window.HOURS[i].temp = Math.round(item.main.temp);
-        window.HOURS[i].rain = Math.round((item.pop || 0) * 100);
-        window.HOURS[i].icon = weatherEmoji(item.weather?.[0]?.id);
-      });
-    }
+      const originalPoint = RT.forecast.list.find(p => Math.abs(p.dt - item.dt) < 1801);
+      const deg = originalPoint?.wind?.deg || 0;
+
+      return `
+        <div class="hour-card ${tCls}${i === 0 ? ' active' : ''}">
+          <div class="hour-time">${t}</div>
+          <span class="hour-icon">${icon}</span>
+          <div class="hour-temp">${temp}°</div>
+          
+          <div class="hour-wind-row">
+            <svg class="hour-wind-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="transform: rotate(${deg}deg)">
+              <path d="M12 19V5M5 12l7-7 7 7"/>
+            </svg>
+            <span>${mps2kmh(item.wind || 0)}</span>
+          </div>
+
+          <div class="hour-rain">💧 ${rain}%</div>
+          <div class="rain-bar"><div class="rain-fill" style="width:${rain}%"></div></div>
+        </div>`;
+    }).join('');
   }
 
   function renderDailyChart() {
     const canvas = $('tempChart');
-    if (!canvas || !RT.forecast?.list) return;
+    if (!canvas) return;
+    const items = getInterpolated24h();
+    if (!items.length) return;
     const ctx = canvas.getContext('2d');
     const W = canvas.offsetWidth || 800;
     const H = 130;
@@ -343,8 +500,7 @@
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
-    const items = RT.forecast.list.slice(0, 8);
-    const temps = items.map(i => RT.dispT(i.main.temp));
+    const temps = items.map(i => RT.dispT(i.temp));
     const rains = items.map(i => Math.round((i.pop || 0) * 100));
     const n = temps.length;
     if (n < 2) return;
@@ -361,13 +517,14 @@
     });
 
     rains.forEach((r, i) => {
+      if (i % 2 !== 0) return;
       const bH = (r / 100) * (H - 44);
       ctx.fillStyle = `rgba(56,189,248,${0.08 + r / 600})`;
-      ctx.fillRect(px(i) - 7, H - 20 - bH, 14, bH);
+      ctx.fillRect(px(i) - 6, H - 20 - bH, 12, bH);
     });
 
     const aGrad = ctx.createLinearGradient(0, 0, 0, H);
-    aGrad.addColorStop(0, 'rgba(251,146,60,0.30)');
+    aGrad.addColorStop(0, 'rgba(251,146,60,0.25)');
     aGrad.addColorStop(1, 'rgba(251,146,60,0.02)');
     ctx.beginPath();
     ctx.moveTo(px(0), py(temps[0]));
@@ -384,28 +541,28 @@
       const cx = (px(i - 1) + px(i)) / 2;
       ctx.bezierCurveTo(cx, py(temps[i - 1]), cx, py(temps[i]), px(i), py(temps[i]));
     }
-    ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 2.2;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
 
     items.forEach((item, i) => {
+      if (i % 3 !== 0 && i !== 0 && i !== n - 1) return;
       const x = px(i), y = py(temps[i]);
       ctx.save();
       ctx.shadowColor = i === 0 ? '#38bdf8' : '#fb923c';
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.arc(x, y, 3.5, 0, Math.PI * 2);
       ctx.fillStyle = i === 0 ? '#38bdf8' : '#fb923c';
       ctx.fill();
       ctx.restore();
-      if (i % 2 === 0) {
-        ctx.fillStyle = 'rgba(232,234,239,0.92)';
-        ctx.font = 'bold 10px DM Sans, system-ui';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${temps[i]}°`, x, y - 9);
-      }
+      
+      ctx.fillStyle = 'rgba(232,234,239,0.92)';
+      ctx.font = 'bold 10px DM Sans, system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${temps[i]}°`, x, y - 9);
+
       const dt = new Date(item.dt * 1000);
-      const tl = i === 0 ? 'Giờ này'
-        : dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      const tl = i === 0 ? 'Bây giờ' : dt.getHours() + ':00';
       ctx.fillStyle = 'rgba(139,147,167,0.85)';
       ctx.font = '9px DM Sans, system-ui';
       ctx.textAlign = 'center';
@@ -515,7 +672,6 @@
     const uvEl = $('detailUv');
     if (uvEl) uvEl.className = `detail-stat ${uvCls[uvi]}`;
 
-    // Trigger UV alert check
     checkUVAlert(uvi);
 
     if (aqi?.list?.[0]) {
@@ -544,7 +700,6 @@
     const rfill = $('rainBarFill');
     if (rfill) rfill.style.width = rainProb + '%';
 
-    // Clouds + dew
     setTxt('detailCloud', clouds);
     const cbf = $('cloudBarFill');
     if (cbf) cbf.style.width = clouds + '%';
@@ -552,7 +707,6 @@
     const dew = Math.round(tempC - (100 - humidity) / 5);
     setTxt('detailDew', RT.dispT(dew) + su);
 
-    // Pressure
     setTxt('sPressure', (m.pressure || 1010) + ' hPa');
   }
   function animateSunArc(sunrise, sunset) {
@@ -611,7 +765,7 @@ function checkUVAlert(uvi) {
 
     const hr = new Date().getHours();
     const sunnyHours = hr >= 9 && hr <= 16;
-    let advice = 'Bôi kem chống nắng SPF 30+ ';
+    let advice = 'Bôi kem chống nắng ';
     if (sunnyHours) {
       advice += ' hoặc mặc áo khoác/áo chống nắng';
     }
@@ -623,7 +777,6 @@ function checkUVAlert(uvi) {
     const key = `uv-${uvi}-${Math.round(RT.lat * 100)}-${Math.round(RT.lon * 100)}`;
     if (RT.dismissedAlerts.has(key)) return;
 
-    // Top banner
     const alertsCont = $('alertsContainer');
     if (alertsCont && !alertsCont.querySelector('.smart-alert--uv')) {
       const banner = document.createElement('div');
@@ -637,17 +790,16 @@ function checkUVAlert(uvi) {
         <button class="smart-alert__close" onclick="this.parentElement.remove(); RT.dismissedAlerts.add('${key}'); RT.uvDismissed = true;">×</button>
       `;
       alertsCont.appendChild(banner);
-      // Auto-dismiss after 30s
+
       setTimeout(() => {
         if (banner.parentNode) banner.remove();
         RT.dismissedAlerts.add(key);
       }, 30000);
     }
 
-    // Popup
     showAlertPopup({
       lvl: sunnyHours ? 'warn' : 'info',
-      title: `☀️ UV ${uvi} - ${uvLevel}`,
+      title: ` UV ${uvi} - ${uvLevel}`,
       body: advice
     }, key);
   }
@@ -661,7 +813,7 @@ function checkUVAlert(uvi) {
     }
     el.className = `rt-alert-popup rt-alert-${lvl} rt-alert-show`;
     el.innerHTML = `
-      <div class="rt-al-icon">${lvl === 'danger' ? '🚨' : '⚠️'}</div>
+      <div class="rt-al-icon">${lvl === 'danger' ? '' : '⚠️'}</div>
       <div class="rt-al-body">
         <div class="rt-al-title">${title}</div>
         <div class="rt-al-text">${body}</div>
@@ -801,9 +953,12 @@ function checkUVAlert(uvi) {
   function startLiveClock() {
     const el = $('rt-live-clock');
     if (!el) return;
+    const ft = $('footerTime');
     const tick = () => {
-      el.textContent = new Date().toLocaleTimeString('vi-VN',
+      const timeStr = new Date().toLocaleTimeString('vi-VN',
         { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      el.textContent = timeStr;
+      if (ft) ft.textContent = timeStr;
     };
     tick();
     setInterval(tick, 1000);
@@ -937,11 +1092,11 @@ function checkUVAlert(uvi) {
         </header>
         <div class="rt-radar-wrap">
           <div class="rt-map-tabs">
-            <button class="rt-map-btn active" data-layer="precipitation_new">🌧️ Mưa</button>
-            <button class="rt-map-btn" data-layer="clouds_new">☁️ Mây</button>
-            <button class="rt-map-btn" data-layer="wind_new">💨 Gió</button>
-            <button class="rt-map-btn" data-layer="temp_new">🌡️ Nhiệt độ</button>
-            <button class="rt-map-btn" data-layer="pressure_new">📊 Áp suất</button>
+            <button class="rt-map-btn active" data-layer="precipitation_new"> Mưa</button>
+            <button class="rt-map-btn" data-layer="clouds_new"> Mây</button>
+            <button class="rt-map-btn" data-layer="wind_new"> Gió</button>
+            <button class="rt-map-btn" data-layer="temp_new"> Nhiệt độ</button>
+            <button class="rt-map-btn" data-layer="pressure_new"> Áp suất</button>
           </div>
           <div id="rt-radar-map" class="rt-radar-map"></div>
         </div>`;
@@ -984,14 +1139,13 @@ function checkUVAlert(uvi) {
       const div = document.createElement('div');
       div.className = 'rt-footer-row';
       div.innerHTML = `
-        <span class="rt-footer-label">🕐 Giờ địa phương</span>
+        <span class="rt-footer-label"> Giờ địa phương</span>
         <span id="rt-live-clock" class="rt-live-clock">--:--:--</span>
         <span class="rt-sep">·</span>
         <span class="rt-footer-label">Cập nhật lúc</span>
         <span id="rt-last-refresh" class="rt-live-clock">—</span>`;
       footer.prepend(div);
     }
-
 
   }
 
@@ -1004,7 +1158,6 @@ function checkUVAlert(uvi) {
 @keyframes rt-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 @keyframes rt-fadein{ from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
 
-/* Live badge */
 .rt-badge-wrap { display:flex; align-items:center; gap:8px; }
 .rt-live-badge {
   padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700;
@@ -1013,7 +1166,6 @@ function checkUVAlert(uvi) {
   animation:rt-pulse 2.2s ease-in-out infinite;
 }
 
-/* Countdown ring */
 .rt-countdown {
   position:relative; width:34px; height:34px;
   display:flex; align-items:center; justify-content:center;
@@ -1024,7 +1176,6 @@ function checkUVAlert(uvi) {
   color:var(--accent); font-variant-numeric:tabular-nums;
 }
 
-/* Radar */
 .rt-radar-wrap { border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--border); }
 .rt-map-tabs {
   display:flex; background:var(--bg-elevated);
@@ -1055,7 +1206,6 @@ function checkUVAlert(uvi) {
   border-color:var(--border) !important;
 }
 
-/* History */
 .rt-history-card { padding:0; overflow:hidden; border-radius:var(--radius-lg); }
 .rt-history-table { width:100%; border-collapse:collapse; font-size:13px; }
 .rt-history-table th {
@@ -1085,7 +1235,6 @@ function checkUVAlert(uvi) {
   border:1px solid rgba(59,158,255,.2); font-size:12px; font-weight:600; color:var(--accent);
 }
 
-/* Alert popup */
 .rt-alert-popup {
   position:fixed; top:-130px; left:50%; transform:translateX(-50%);
   z-index:9999; display:flex; align-items:center; gap:14px;
@@ -1110,7 +1259,6 @@ function checkUVAlert(uvi) {
 }
 .rt-al-close:hover { background:var(--surface-hover); color:var(--text); }
 
-/* Footer row */
 .rt-footer-row {
   display:flex; align-items:center; gap:8px; flex-wrap:wrap;
   font-size:12px; color:var(--muted);
@@ -1125,10 +1273,8 @@ function checkUVAlert(uvi) {
   padding:0; text-decoration:underline; text-underline-offset:3px;
 }
 
-/* Hourly wind */
 .hour-wind { font-size:10px; color:var(--muted); margin-top:2px; }
 
-/* Toast types */
 .toast-rt-success { border-color:rgba(74,222,128,.3); }
 .toast-rt-warn    { border-color:rgba(240,160,75,.3); }
 .toast-rt-error   { border-color:rgba(248,113,113,.3); }
@@ -1197,7 +1343,6 @@ function checkUVAlert(uvi) {
       { id: 31, name: 'Xã Đất Mũi', district: 'Ngọc Hiển', lat: 8.5922, lon: 104.7225 },
       { id: 32, name: 'Xã Viên An', district: 'Ngọc Hiển', lat: 8.6700, lon: 104.9300 },
 
-      // ── TP. BẠC LIÊU (7 phường + 3 xã) ──
       { id: 33, name: 'Phường 1', district: 'TP. Bạc Liêu', lat: 9.2941, lon: 105.7216 },
       { id: 34, name: 'Phường 2', district: 'TP. Bạc Liêu', lat: 9.2960, lon: 105.7240 },
       { id: 35, name: 'Phường 3', district: 'TP. Bạc Liêu', lat: 9.2920, lon: 105.7190 },
@@ -1209,7 +1354,6 @@ function checkUVAlert(uvi) {
       { id: 41, name: 'Xã Vĩnh Trạch Đông', district: 'TP. Bạc Liêu', lat: 9.2700, lon: 105.7600 },
       { id: 42, name: 'Xã Hiệp Thành', district: 'TP. Bạc Liêu', lat: 9.3100, lon: 105.7350 },
 
-      // ── HUYỆN HÒA BÌNH (1 thị trấn + 5 xã) ──
       { id: 43, name: 'TT. Hòa Bình', district: 'Hòa Bình', lat: 9.2500, lon: 105.6200 },
       { id: 44, name: 'Xã Vĩnh Bình', district: 'Hòa Bình', lat: 9.2300, lon: 105.6100 },
       { id: 45, name: 'Xã Vĩnh Mỹ A', district: 'Hòa Bình', lat: 9.2100, lon: 105.5900 },
@@ -1217,7 +1361,6 @@ function checkUVAlert(uvi) {
       { id: 47, name: 'Xã Vĩnh Hậu', district: 'Hòa Bình', lat: 9.1900, lon: 105.5700 },
       { id: 48, name: 'Xã Vĩnh Hậu A', district: 'Hòa Bình', lat: 9.1800, lon: 105.5600 },
 
-      // ── HUYỆN VĨNH LỢI (1 thị trấn + 7 xã) ──
       { id: 49, name: 'TT. Châu Hưng', district: 'Vĩnh Lợi', lat: 9.3200, lon: 105.6900 },
       { id: 50, name: 'Xã Châu Hưng A', district: 'Vĩnh Lợi', lat: 9.3100, lon: 105.6750 },
       { id: 51, name: 'Xã Hưng Hội', district: 'Vĩnh Lợi', lat: 9.3300, lon: 105.6600 },
@@ -1227,16 +1370,13 @@ function checkUVAlert(uvi) {
       { id: 55, name: 'Xã Châu Thới', district: 'Vĩnh Lợi', lat: 9.2800, lon: 105.6850 },
       { id: 56, name: 'Xã Nhà Mát', district: 'Vĩnh Lợi', lat: 9.3200, lon: 105.7400 },
 
-      // ── HUYỆN HỒNG DÂN (2 thị trấn + 5 xã) ──
       { id: 57, name: 'TT. Ngan Dừa', district: 'Hồng Dân', lat: 9.4800, lon: 105.5300 },
-      { id: 58, name: 'TT. Hồng Dân', district: 'Hồng Dân', lat: 9.5000, lon: 105.5100 },
       { id: 59, name: 'Xã Ninh Quới', district: 'Hồng Dân', lat: 9.4600, lon: 105.5500 },
       { id: 60, name: 'Xã Ninh Quới A', district: 'Hồng Dân', lat: 9.4700, lon: 105.5700 },
       { id: 61, name: 'Xã Ninh Hòa', district: 'Hồng Dân', lat: 9.5100, lon: 105.5200 },
       { id: 62, name: 'Xã Lộc Ninh', district: 'Hồng Dân', lat: 9.5300, lon: 105.5400 },
       { id: 63, name: 'Xã Vĩnh Lộc', district: 'Hồng Dân', lat: 9.5500, lon: 105.5600 },
 
-      // ── HUYỆN PHƯỚC LONG (1 thị trấn + 6 xã) ──
       { id: 64, name: 'TT. Phước Long', district: 'Phước Long', lat: 9.3900, lon: 105.4600 },
       { id: 65, name: 'Xã Phước Long', district: 'Phước Long', lat: 9.3700, lon: 105.4400 },
       { id: 66, name: 'Xã Hưng Phú', district: 'Phước Long', lat: 9.4000, lon: 105.4800 },
@@ -1245,7 +1385,6 @@ function checkUVAlert(uvi) {
       { id: 69, name: 'Xã Phong Thạnh Tây A', district: 'Phước Long', lat: 9.3500, lon: 105.4300 },
       { id: 70, name: 'Xã Phong Thạnh Tây B', district: 'Phước Long', lat: 9.3400, lon: 105.4200 },
 
-      // ── TX. GIÁ RAI (3 phường + 6 xã) ──
       { id: 71, name: 'Phường 1 (Giá Rai)', district: 'TX. Giá Rai', lat: 9.2000, lon: 105.4700 },
       { id: 72, name: 'Phường Hộ Phòng', district: 'TX. Giá Rai', lat: 9.1800, lon: 105.4900 },
       { id: 73, name: 'Phường Láng Tròn', district: 'TX. Giá Rai', lat: 9.2100, lon: 105.4600 },
@@ -1256,7 +1395,6 @@ function checkUVAlert(uvi) {
       { id: 78, name: 'Xã Long Điền', district: 'TX. Giá Rai', lat: 9.2200, lon: 105.4300 },
       { id: 79, name: 'Xã Long Điền Đông', district: 'TX. Giá Rai', lat: 9.2100, lon: 105.4200 },
 
-      // ── HUYỆN ĐÔNG HẢI (1 thị trấn + 7 xã) ──
       { id: 80, name: 'TT. Gành Hào', district: 'Đông Hải', lat: 9.0300, lon: 105.4200 },
       { id: 81, name: 'Xã Long Điền Đông A', district: 'Đông Hải', lat: 9.0700, lon: 105.4400 },
       { id: 82, name: 'Xã Long Điền Tây', district: 'Đông Hải', lat: 9.0900, lon: 105.4600 },
@@ -1273,32 +1411,57 @@ function checkUVAlert(uvi) {
 
     let currentFilter = 'all';
 
+    const resetBtn = $('searchReset');
+
     function renderResults(filter, query) {
       let items = WARDS_DATA;
-      if (filter && filter !== 'all') items = items.filter(w => w.district === filter);
-      if (query) {
+      const isSearchEmpty = !query || query.trim() === '';
+      
+      if (resetBtn) resetBtn.classList.toggle('visible', !isSearchEmpty);
+
+      if (filter && filter !== 'all') {
+        items = items.filter(w => w.district === filter);
+      }
+
+      if (!isSearchEmpty) {
         const q = query.toLowerCase();
         items = items.filter(w =>
           w.name.toLowerCase().includes(q) || w.district.toLowerCase().includes(q));
+      } else if (filter === 'all') {
+        const suggestedIds = [1, 33, 13, 28, 64, 80];
+        items = WARDS_DATA.filter(w => suggestedIds.includes(w.id));
       }
 
       if (!items.length) {
-        results.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted)">Không tìm thấy địa điểm nào</div>`;
+        results.innerHTML = `
+          <div class="search-empty-state">
+            <div class="search-empty-icon">🔍</div>
+            <div class="search-empty-title">Không tìm thấy địa điểm</div>
+            <div class="search-empty-text">Thử tìm theo tên huyện hoặc xã khác nhé.</div>
+          </div>`;
         return;
       }
 
-      results.innerHTML = items.map(w => `
-        <div class="sr-item" data-id="${w.id}">
-          <div class="sr-icon">📍</div>
-          <div>
-            <div class="sr-name">${w.name}</div>
-            <div class="sr-dist">${w.district}</div>
-          </div>
-          <div class="sr-weather">
-            <div class="sr-temp">${w.lat.toFixed(2)}°N</div>
-            <div class="sr-rain">${w.lon.toFixed(2)}°E</div>
-          </div>
-        </div>`).join('');
+      if (isSearchEmpty && filter === 'all') {
+        results.innerHTML = `<div class="search-suggest-label">Gợi ý phổ biến</div>` + generateList(items);
+      } else {
+        results.innerHTML = generateList(items);
+      }
+
+      function generateList(list) {
+        return list.map((w, idx) => `
+          <div class="sr-item" data-id="${w.id}" style="animation-delay: ${idx * 0.04}s">
+            <div class="sr-icon">${isSearchEmpty ? '⭐' : '📍'}</div>
+            <div class="sr-body">
+              <div class="sr-name">${w.name}</div>
+              <div class="sr-dist">${w.district}</div>
+            </div>
+            <div class="sr-weather">
+              <div class="sr-temp">${w.lat.toFixed(2)}°N</div>
+              <div class="sr-rain">${w.lon.toFixed(2)}°E</div>
+            </div>
+          </div>`).join('');
+      }
 
       results.querySelectorAll('.sr-item').forEach(el => {
         el.addEventListener('click', () => {
@@ -1313,23 +1476,25 @@ function checkUVAlert(uvi) {
       });
     }
 
-    // Open
     searchBtn.addEventListener('click', () => {
       overlay.classList.add('open');
       setTimeout(() => input.focus(), 100);
       renderResults(currentFilter, input.value);
     });
 
-    // Close
+    resetBtn?.addEventListener('click', () => {
+      input.value = '';
+      input.focus();
+      renderResults(currentFilter, '');
+    });
+
     closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) overlay.classList.remove('open');
     });
 
-    // Search input
     input.addEventListener('input', () => renderResults(currentFilter, input.value));
 
-    // District tabs
     tabs.addEventListener('click', (e) => {
       const btn = e.target.closest('.chip');
       if (!btn) return;
@@ -1362,14 +1527,14 @@ function checkUVAlert(uvi) {
         .map(c => c.value);
 
       if (!phone || phone.length < 10) {
-        toast('⚠️ Vui lòng nhập số điện thoại hợp lệ', 'warn');
+        toast(' Vui lòng nhập số điện thoại hợp lệ', 'warn');
         return;
       }
 
       const labels = { storm: 'Bão', flood: 'Triều cường', salinity: 'Xâm nhập mặn' };
       const selected = opts.map(o => labels[o] || o).join(', ') || 'Tất cả';
 
-      toast(`✅ Đăng ký thành công: ${phone} • ${selected}`, 'success');
+      toast(` Đăng ký thành công: ${phone} • ${selected}`, 'success');
       modal.classList.remove('open');
       form.reset();
     });
@@ -1627,15 +1792,12 @@ function checkUVAlert(uvi) {
           </div>
           <div class="hydro-card__footer">
             <span>${s.id}</span>
-            <span class="hydro-card__time">⛳ ${now}</span>
+            <span class="hydro-card__time"> ${now}</span>
           </div>
         </div>`;
     }).join('');
   }
 
-  /* ───────────────────────────────────────────────────────────────
-   * HERO PARTICLES
-   * ─────────────────────────────────────────────────────────────── */
   function initHeroParticles() {
     const canvas = $('heroParticles');
     if (!canvas) return;
@@ -1690,7 +1852,6 @@ function checkUVAlert(uvi) {
         ctx.fill();
       });
 
-      // Draw connections
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
@@ -1714,14 +1875,10 @@ function checkUVAlert(uvi) {
     window.addEventListener('resize', () => { resize(); });
   }
 
-/* ───────────────────────────────────────────────────────────────
- * Realistic 3D Earth Globe with Three.js
- * ─────────────────────────────────────────────────────────────── */
   function init3DEarth() {
     const container = $('earthGlobe');
     if (!container || window.earthScene) return;
-    
-    // Scene setup
+
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true, alpha: true });
@@ -1730,12 +1887,11 @@ function checkUVAlert(uvi) {
 
     window.earthScene = { scene, camera, renderer, container };
 
-    // Earth geometry & materials
     const earthGeo = new THREE.SphereGeometry(0.6, 64, 64);
     const earthTexture = new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
     const earthBump = new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-topology.png');
     const earthSpec = new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-water.png');
-    
+
     const earthMat = new THREE.MeshPhongMaterial({
       map: earthTexture,
       bumpMap: earthBump,
@@ -1747,7 +1903,6 @@ function checkUVAlert(uvi) {
     const earth = new THREE.Mesh(earthGeo, earthMat);
     scene.add(earth);
 
-    // Clouds
     const cloudGeo = new THREE.SphereGeometry(0.61, 64, 64);
     const cloudTexture = new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png');
     const cloudMat = new THREE.MeshPhongMaterial({
@@ -1760,7 +1915,6 @@ function checkUVAlert(uvi) {
     const clouds = new THREE.Mesh(cloudGeo, cloudMat);
     scene.add(clouds);
 
-    // Atmosphere glow
     const atmoGeo = new THREE.SphereGeometry(0.65, 64, 64);
     const atmoMat = new THREE.MeshBasicMaterial({
       color: 0x72a6ff,
@@ -1771,33 +1925,27 @@ function checkUVAlert(uvi) {
     const atmosphere = new THREE.Mesh(atmoGeo, atmoMat);
     scene.add(atmosphere);
 
-    // Lighting
     const ambientLight = new THREE.AmbientLight(0x333333, 0.4);
     scene.add(ambientLight);
     const sunLight = new THREE.DirectionalLight(0xffffff, 1);
     sunLight.position.set(5, 3, 5);
     scene.add(sunLight);
 
-    // GPS marker (Cà Mau default)
     const gpsMarkerGeo = new THREE.SphereGeometry(0.015, 8, 8);
     const gpsMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
     window.gpsMarker = new THREE.Mesh(gpsMarkerGeo, gpsMat);
     scene.add(window.gpsMarker);
 
-    // Camera position
     camera.position.z = 1.7;
 
-    // Rotation & controls
     let mouseDown = false, rotX = 0, rotY = 0, targetRotX = 0, targetRotY = 0;
     const autoRotateSpeed = 0.0008;
 
     function animate() {
       requestAnimationFrame(animate);
 
-      // Auto-rotate
       targetRotY += autoRotateSpeed;
 
-      // Smooth rotation
       rotY += (targetRotY - rotY) * 0.1;
       rotX += (targetRotX - rotX) * 0.1;
 
@@ -1811,7 +1959,6 @@ function checkUVAlert(uvi) {
       renderer.render(scene, camera);
     }
 
-    // Mouse controls
     let prevMouse = { x: 0, y: 0 };
     container.addEventListener('mousedown', (e) => {
       mouseDown = true;
@@ -1851,7 +1998,6 @@ function checkUVAlert(uvi) {
       prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     });
 
-    // Resize
     function resize() {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -1861,7 +2007,6 @@ function checkUVAlert(uvi) {
     }
     window.addEventListener('resize', resize);
 
-    // Update GPS marker
     window.updateGPSMarker = (lat = 9.18, lon = 105.15) => {
       const phi = (90 - lat) * Math.PI / 180;
       const theta = (lon + 180) * Math.PI / 180;
@@ -1893,10 +2038,9 @@ function checkUVAlert(uvi) {
       localStorage.setItem('weatherUnit', RT.unit());
       updateToggleDisplay();
       toast(`🌡️ Chuyển sang ${RT.unit()}`, 'success');
-      refreshAll(); // Re-render all displays with new unit
+      refreshAll();
     });
 
-    // Initialize display
     updateToggleDisplay();
   }
 
@@ -1935,8 +2079,7 @@ function checkUVAlert(uvi) {
     function setTheme(t) {
       root.setAttribute('data-theme', t);
       localStorage.setItem('rt_theme', t);
-      
-      // Icon removed per request
+
       const icon = $('themeIcon');
       if (icon) icon.textContent = '';
 
@@ -1960,14 +2103,17 @@ function checkUVAlert(uvi) {
     initHeroParticles();
     init3DEarth();
 
-    await new Promise(r => setTimeout(r, 800));
     const coords = window.WARDS_COORDS || [];
     if (coords.length) {
       const c = coords.find(c => c.id === 1) || coords[0];
       setLocation(c.lat, c.lon, window.WARDS?.[0]?.name || DEFAULT_NAME);
     }
 
-    await refreshAll();
+    const initialRefresh = refreshAll();
+
+    triggerGPS(true);
+
+    await initialRefresh;
 
     fetchComparison();
     renderHydroStations();
@@ -1997,7 +2143,7 @@ function checkUVAlert(uvi) {
     const cc = $('comparisonChart');
     if (cc) ro.observe(cc);
 
-    console.log('✅ AeroCast Real-Time Engine v3.0 — sẵn sàng (Cà Mau mới + cũ). °C/°F toggle restored!');
+    console.log(' Mô phỏng dự báo thời tiết Cà Mau — sẵn sàng (Cà Mau mới + cũ). °C/°F toggle restored!');
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
