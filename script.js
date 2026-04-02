@@ -168,7 +168,7 @@
       owmGet('/forecast', { cnt: 40 }),
       fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${RT.lat}&lon=${RT.lon}&appid=${OWM_KEY}`)
         .then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`https://api.openweathermap.org/data/3.0/onecall?lat=${RT.lat}&lon=${RT.lon}&exclude=minutely,hourly,alerts&units=metric&lang=vi&appid=${OWM_KEY}`)
+      fetch(`https://api.openweathermap.org/data/3.0/onecall?lat=${RT.lat}&lon=${RT.lon}&exclude=minutely,hourly&units=metric&lang=vi&appid=${OWM_KEY}`)
         .then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
     RT.current = cur.status === 'fulfilled' ? cur.value : null;
@@ -243,10 +243,8 @@
           const ward = result?.ward;
 
           if (ward) {
-            const coord = result.coord;
-            setLocation(coord?.lat ?? la, coord?.lon ?? lo, ward.name);
-            if (window.selectWard_original) window.selectWard_original(ward);
-            else if (window.selectWard) window.selectWard(ward);
+            setLocation(la, lo, ward.name);
+            if (window.selectWard) window.selectWard(ward, { lat: la, lon: lo });
           } else {
             setLocation(la, lo, `${la.toFixed(3)}°N`);
           }
@@ -539,7 +537,6 @@
     root.style.setProperty('--orb-glow', `rgba(240,160,75,${0.25 + rPct * 0.45})`);
 
     applyDynamicBackground(d);
-    checkExtremeAlert();
   }
 
   function applyDynamicBackground(d) {
@@ -661,7 +658,7 @@
       return;
     }
 
-    const nextItems = items.slice(0, 12);
+    const nextItems = items.slice(0, 2);
     const hasStorm = nextItems.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
     const hasWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 28);
     const curRain = RT.current?.rain?.['1h'] || RT.current?.rain?.['3h'] || 0;
@@ -698,19 +695,19 @@
       banner.dataset.level = 'danger';
       banner.dataset.message = details.join('; ');
       banner.innerHTML =
-        `<strong>Khuyến cáo thủy sản</strong>: Có rủi ro trong 12 giờ tới.` +
+        `<strong>Khuyến cáo thủy sản</strong>: Có rủi ro trong 60 phút tới.` +
         `<div class="farm-detail">` +
         details.map(d => `• ${d}`).join('<br>') +
         `</div>` +
         `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
     } else if (warnDetails.length) {
-      banner.classList.remove('is-warn');
-      banner.classList.add('is-safe');
+      banner.classList.remove('is-safe');
+      banner.classList.add('is-warn');
       banner.hidden = false;
       banner.dataset.level = 'warn';
       banner.dataset.message = warnDetails.join('; ');
       banner.innerHTML =
-        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 12 giờ tới.` +
+        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 60 phút tới.` +
         `<div class="farm-detail">` +
         warnDetails.map(d => `• ${d}`).join('<br>') +
         `</div>` +
@@ -722,7 +719,7 @@
       banner.dataset.level = 'ok';
       banner.dataset.message = 'Ổn định';
       banner.innerHTML =
-        `<strong>Thủy sản ổn định</strong>: Điều kiện thuận lợi 12 giờ tới.` +
+        `<strong>Thủy sản ổn định</strong>: Điều kiện thuận lợi 60 phút tới.` +
         `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
     }
   }
@@ -736,14 +733,14 @@
       return;
     }
 
-    const nextItems = items.slice(0, 12);
+    const nextItems = items.slice(0, 2);
     const hasStorm = nextItems.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
     const hasHeat = nextItems.some(i => i.temp >= 35);
     const hasWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 28);
     const curRain = RT.current?.rain?.['1h'] || RT.current?.rain?.['3h'] || 0;
     const hasHeavyRain = curRain >= 10 || nextItems.some(i => (i.pop || 0) >= 0.7);
 
-    const warnHeat = nextItems.some(i => i.temp >= 33);
+    const warnHeat = nextItems.some(i => i.temp >= 32);
     const warnWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 22);
     const warnRain = curRain >= 5 || nextItems.some(i => (i.pop || 0) >= 0.5);
 
@@ -756,7 +753,7 @@
     const warnDetails = [];
     if (!hasHeavyRain && warnRain) warnDetails.push('Mưa vừa (≥5mm/h hoặc xác suất mưa ≥50%)');
     if (!hasWind && warnWind) warnDetails.push('Gió khá mạnh (≥22 km/h)');
-    if (!hasHeat && warnHeat) warnDetails.push('Nắng nóng nhẹ (≥33°C)');
+    if (!hasHeat && warnHeat) warnDetails.push('Nắng nóng nhẹ (≥33°C) trong 12 giờ tới');
 
     const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
     const crops = getCropsForWard(wardInfo);
@@ -771,7 +768,7 @@
       banner.dataset.level = 'danger';
       banner.dataset.message = details.join('; ');
       banner.innerHTML =
-        `<strong>Cảnh báo nông dân</strong>: Có điều kiện bất lợi trong 12 giờ tới.` +
+        `<strong>Cảnh báo nông dân</strong>: Có điều kiện bất lợi trong 60 phút tới.` +
         `<div class="farm-detail">` +
         details.map(d => `• ${d}`).join('<br>') +
         `</div>` +
@@ -784,7 +781,7 @@
       banner.dataset.level = 'warn';
       banner.dataset.message = warnDetails.join('; ');
       banner.innerHTML =
-        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 12 giờ tới.` +
+        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 60 phút tới.` +
         `<div class="farm-detail">` +
         warnDetails.map(d => `• ${d}`).join('<br>') +
         `</div>` +
@@ -797,7 +794,7 @@
       banner.dataset.level = 'ok';
       banner.dataset.message = 'Ổn định';
       banner.innerHTML =
-        `<strong>Thời tiết ổn định</strong>: Không có dấu hiệu nguy hiểm 12 giờ tới.` +
+        `<strong>Thời tiết ổn định</strong>: Không có dấu hiệu nguy hiểm 60 phút tới.` +
         `${crops.length ? ` Cây trồng chính: ${crops.join(', ')}.` : ''}` +
         `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
     }
@@ -813,7 +810,7 @@
       return;
     }
 
-    const nextItems = items.slice(0, 12);
+    const nextItems = items.slice(0, 2);
     const cur = RT.current;
     const visibilityKm = cur.visibility != null ? (cur.visibility / 1000) : null;
     const hasStorm = nextItems.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
@@ -840,7 +837,7 @@
     const warnDetails = [];
     if (!hasHeavyRain && warnRain) warnDetails.push('Có mưa, đường trơn');
     if (!hasWind && warnWind) warnDetails.push('Gió khá mạnh');
-    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt cao, đi đường nên che nắng');
+    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt cao (≥32°C), đi đường nên che nắng trong 12 giờ tới');
     if (!hasLowVis && warnVis) warnDetails.push('Tầm nhìn giảm (<4 km)');
 
     const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
@@ -855,7 +852,7 @@
       banner.dataset.level = 'danger';
       banner.dataset.message = details.join('; ');
       banner.innerHTML =
-        `<strong>Khuyến cáo khi ra đường</strong>: Có nguy cơ trong 12 giờ tới.` +
+        `<strong>Khuyến cáo khi ra đường</strong>: Có nguy cơ trong 60 phút tới.` +
         `<div class="farm-detail">` +
         details.map(d => `• ${d}`).join('<br>') +
         `</div>` +
@@ -867,7 +864,7 @@
       banner.dataset.level = 'warn';
       banner.dataset.message = warnDetails.join('; ');
       banner.innerHTML =
-        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 12 giờ tới.` +
+        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 60 phút tới.` +
         `<div class="farm-detail">` +
         warnDetails.map(d => `• ${d}`).join('<br>') +
         `</div>` +
@@ -879,7 +876,7 @@
       banner.dataset.level = 'ok';
       banner.dataset.message = 'Ổn định';
       banner.innerHTML =
-        `<strong>Điều kiện đi đường ổn định</strong>: 12 giờ tới nhìn chung thuận lợi.` +
+        `<strong>Điều kiện đi đường ổn định</strong>: 60 phút tới nhìn chung thuận lợi.` +
         `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
     }
   }
@@ -1316,8 +1313,6 @@
     const uvEl = $('detailUv');
     if (uvEl) uvEl.className = `detail-stat ${uvCls[uvi]}`;
 
-    checkUVAlert(uvi);
-
     if (aqi?.list?.[0]) {
       const comp = aqi.list[0].components || {};
       const aqiI = aqi.list[0].main?.aqi ?? 2;
@@ -1369,39 +1364,40 @@
     if (arcPath) arcPath.style.strokeDashoffset = (480 * (1 - pct)).toFixed(0);
   }
 
-function checkExtremeAlert() {
-    const d = RT.current;
-    if (!d) return;
-    const code = d.weather?.[0]?.id ?? 800;
-    const temp = d.main?.temp ?? 30;
-    const wind = mps2kmh(d.wind?.speed ?? 0);
-    const rain = d.rain?.['1h'] ?? 0;
+function getOfficialAlertSummary() {
+    const alerts = RT.onecall?.alerts || [];
+    if (!alerts.length) return null;
 
-    const alerts = [];
-    if (code >= 200 && code < 300)
-      alerts.push({
-        lvl: 'danger', title: ' Dông sét đang hoạt động',
-        body: `${d.weather[0].description} – Tránh xa cây lớn và khu vực trống trải.`
-      });
-    if (wind > 60)
-      alerts.push({ lvl: 'danger', title: ' Gió bão', body: `Gió ${wind} km/h – Nguy hiểm tàu thuyền!` });
-    else if (wind > 40)
-      alerts.push({ lvl: 'warn', title: ' Gió mạnh', body: `Gió ${wind} km/h – Thận trọng khi ra biển.` });
-    if (rain > 20)
-      alerts.push({
-        lvl: 'warn', title: ' Mưa lớn',
-        body: `${rain.toFixed(1)} mm/h – Cảnh báo ngập úng cục bộ.`
-      });
-    if (temp > 38)
-      alerts.push({
-        lvl: 'warn', title: ' Nắng nóng gay gắt',
-        body: `${Math.round(temp)}°C – Hạn chế hoạt động ngoài trời 10:00–16:00.`
-      });
+    const now = Math.floor(Date.now() / 1000);
+    const active = alerts.filter(a => (a.end == null || a.end >= now));
+    const list = active.length ? active : alerts;
+    const sorted = list.slice().sort((a, b) => (a.start || 0) - (b.start || 0));
+    const a = sorted[0];
 
-    if (!alerts.length) return;
-    const key = alerts.map(a => a.title).join('|');
+    const title = (a.event || 'Cảnh báo thời tiết').trim();
+    const body = (a.description || '').replace(/\n+/g, ' ').trim();
+    const timeStart = a.start ? new Date(a.start * 1000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
+    const timeEnd = a.end ? new Date(a.end * 1000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
+    const timeSpan = (timeStart && timeEnd) ? `${timeStart}–${timeEnd}` : (timeStart || timeEnd);
+    const sender = (a.sender_name || 'OpenWeatherMap').trim();
+
+    const dangerRe = /(extreme|severe|warning|bão|giông|lũ|sạt lở|ngập|triều cường)/i;
+    const level = dangerRe.test(`${title} ${body}`) ? 'danger' : 'warn';
+
+    return { level, title, body, timeSpan, sender, raw: a };
+  }
+
+  function renderOfficialAlerts() {
+    const summary = getOfficialAlertSummary();
+    if (!summary) return;
+    const key = `owm-${summary.title}-${summary.raw?.start || ''}-${summary.raw?.end || ''}`;
     if (RT.dismissedAlerts.has(key)) return;
-    showAlertPopup(alerts[0], key);
+
+    const body = summary.timeSpan
+      ? `${summary.timeSpan} · ${summary.body || 'Có cảnh báo thời tiết chính thức.'}`
+      : (summary.body || 'Có cảnh báo thời tiết chính thức.');
+
+    showAlertPopup({ lvl: summary.level, title: ` ${summary.title}`, body }, key);
   }
 
 function checkUVAlert(uvi) {
@@ -1662,6 +1658,7 @@ function checkUVAlert(uvi) {
       renderFarmAlert();
       renderAquaAlert();
       renderRoadAlert();
+      renderOfficialAlerts();
       renderFarmDashboard();
       renderAquaDashboard();
       renderRoadDashboard();
@@ -1669,7 +1666,6 @@ function checkUVAlert(uvi) {
       renderDailyChart();
       renderForecast7Day();
     renderDetails();
-    checkExtremeAlert();
       buildHistory();
 
       if (typeof window.renderForecastHome === 'function') window.renderForecastHome();
@@ -1701,9 +1697,15 @@ function checkUVAlert(uvi) {
     window.selectWard = function (w, realData) {
       const coords = window.WARDS_COORDS || [];
       const coord = coords.find(c => c.id === w?.id);
-      if (coord) setLocation(coord.lat, coord.lon, w.name);
-      else if (w?.lat != null) setLocation(w.lat, w.lon, w.name);
       orig(w, realData);
+      if (realData?.lat != null && realData?.lon != null) {
+        // Ensure GPS coordinates stay as the data source for alerts.
+        setLocation(realData.lat, realData.lon, w?.name || RT.name);
+      } else if (coord) {
+        setLocation(coord.lat, coord.lon, w.name);
+      } else if (w?.lat != null) {
+        setLocation(w.lat, w.lon, w.name);
+      }
       setTimeout(refreshAll, 200);
     };
   }
