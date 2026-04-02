@@ -12,6 +12,7 @@
   const RT = {
     lat: DEFAULT_LAT, lon: DEFAULT_LON, name: DEFAULT_NAME,
     current: null, forecast: null, airPollution: null, history: [],
+    onecall: null,
     countdownSec: REFRESH_SEC,
     countdownTimer: null,
     leafletMap: null, radarLayer: null, _marker: null,
@@ -33,6 +34,30 @@
     return '☁️';
   }
 
+  function weatherEmojiDayNight(code, isDay) {
+    if (code < 300) return '⛈️';
+    if (code < 600) return isDay ? '🌦️' : '🌧️';
+    if (code < 700) return '❄️';
+    if (code < 800) return '🌫️';
+    if (code === 800) return isDay ? '☀️' : '🌙';
+    if (code <= 802) return isDay ? '🌤️' : '🌥️';
+    return '☁️';
+  }
+
+  function isDayAt(dtSec) {
+    const h = new Date(dtSec * 1000).getHours();
+    return h >= 5 && h < 18;
+  }
+
+  function sunEventIcon(dtSec) {
+    const sys = RT.current?.sys;
+    if (!sys?.sunrise || !sys?.sunset) return null;
+    const near = 45 * 60; 
+    if (Math.abs(dtSec - sys.sunrise) <= near) return '🌅';
+    if (Math.abs(dtSec - sys.sunset) <= near) return '🌇';
+    return null;
+  }
+
   function windDirText(deg) {
     const d = ['Bắc', 'Đông Bắc', 'Đông', 'Đông Nam', 'Nam', 'Tây Nam', 'Tây', 'Tây Bắc'];
     return d[Math.round(deg / 45) % 8] || '—';
@@ -43,6 +68,66 @@
   function setTxt(id, val) {
     const el = $(id);
     if (el) el.textContent = val;
+  }
+
+  function setupNotifications() {
+    if (!('Notification' in window)) return;
+    const btn = $('notifyBtn');
+    const updateBtn = () => {
+      if (!btn) return;
+      btn.style.display = (Notification.permission === 'granted' ? 'none' : 'inline-flex');
+    };
+    updateBtn();
+    if (btn) {
+      btn.addEventListener('click', () => {
+        Notification.requestPermission().then(updateBtn).catch(updateBtn);
+      });
+    }
+  }
+
+  function collectAlertStatus() {
+    const list = [
+      { id: 'roadAlert', title: 'Ra đường' },
+      { id: 'farmAlert', title: 'Nông nghiệp' },
+      { id: 'aquaAlert', title: 'Thủy sản' },
+    ];
+    const levels = { danger: 2, warn: 1 };
+    let best = null;
+    list.forEach(item => {
+      const el = $(item.id);
+      if (!el || el.hidden) return;
+      const lvl = el.dataset.level;
+      if (!levels[lvl]) return;
+      const msg = el.dataset.message || '';
+      const score = levels[lvl];
+      if (!best || score > best.score) {
+        best = { score, level: lvl, title: item.title, message: msg };
+      }
+    });
+    return best;
+  }
+
+  function notifyIfNeeded() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const status = collectAlertStatus();
+    if (!status) return;
+
+    const sig = `${status.level}|${status.title}|${status.message}`;
+    const now = Date.now();
+    let last = {};
+    try { last = JSON.parse(localStorage.getItem('rt_notify_last') || '{}'); } catch (_) {}
+    if (last.sig === sig && now - (last.ts || 0) < 30 * 60 * 1000) return;
+
+    const loc = RT.name || 'Khu vực hiện tại';
+    const title = status.level === 'danger'
+      ? `Cảnh báo nguy hiểm · ${status.title}`
+      : `Cảnh báo · ${status.title}`;
+    const body = `${loc}: ${status.message || 'Có điều kiện cần theo dõi.'}`;
+    try {
+      new Notification(title, { body, tag: 'rt-alert', renotify: true });
+      localStorage.setItem('rt_notify_last', JSON.stringify({ sig, ts: now }));
+    } catch (_) {}
   }
 
   function toast(msg, type = 'info') {
@@ -78,15 +163,27 @@
     return r.json();
   }
   async function fetchAll() {
-    const [cur, fc5, aqi] = await Promise.allSettled([
+    const [cur, fc5, aqi, onecall] = await Promise.allSettled([
       owmGet('/weather'),
       owmGet('/forecast', { cnt: 40 }),
       fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${RT.lat}&lon=${RT.lon}&appid=${OWM_KEY}`)
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`https://api.openweathermap.org/data/3.0/onecall?lat=${RT.lat}&lon=${RT.lon}&exclude=minutely,hourly,alerts&units=metric&lang=vi&appid=${OWM_KEY}`)
         .then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
     RT.current = cur.status === 'fulfilled' ? cur.value : null;
     RT.forecast = fc5.status === 'fulfilled' ? fc5.value : null;
     RT.airPollution = aqi.status === 'fulfilled' ? aqi.value : null;
+    RT.onecall = onecall.status === 'fulfilled' ? onecall.value : null;
+  }
+
+  async function loadCropsData() {
+    try {
+      const r = await fetch('crops_by_ward.json', { cache: 'no-store' });
+      if (r.ok) window.CROPS_BY_WARD = await r.json();
+    } catch (err) {
+      console.warn('[AeroCastRT] crops_by_ward.json not loaded', err);
+    }
   }
   function haversine(la1, lo1, la2, lo2) {
     const R = 6371, d2r = Math.PI / 180;
@@ -199,33 +296,56 @@
     const now = new Date();
     const refNewMoon = new Date('2024-02-09T22:59:00Z');
     const lunCycle = 29.530588853;
-    const diffDays = (now - refNewMoon) / (1000 * 60 * 60 * 24);
-    const age = diffDays % lunCycle;
-    const illum = 50 * (1 - Math.cos((2 * Math.PI * age) / lunCycle));
+
+    const daily = RT.onecall?.daily?.[0];
+    let phaseValue = null;
+    if (daily && typeof daily.moon_phase === 'number') phaseValue = daily.moon_phase;
+
+    const age = phaseValue != null
+      ? (phaseValue * lunCycle)
+      : ((now - refNewMoon) / (1000 * 60 * 60 * 24)) % lunCycle;
+    const illum = phaseValue != null
+      ? 50 * (1 - Math.cos(2 * Math.PI * phaseValue))
+      : 50 * (1 - Math.cos((2 * Math.PI * age) / lunCycle));
 
     let phase = 'Trăng mới', icon = '🌑';
-    if (age < 1.1) { phase = 'Trăng mới'; icon = '🌑'; }
-    else if (age < 6.4) { phase = 'Trăng khuyết đầu tháng'; icon = '🌒'; }
-    else if (age < 8.4) { phase = 'Trăng thượng huyền'; icon = '🌓'; }
-    else if (age < 13.7) { phase = 'Trăng lồi đầu tháng'; icon = '🌔'; }
-    else if (age < 15.8) { phase = 'Trăng tròn'; icon = '🌕'; }
-    else if (age < 21.1) { phase = 'Trăng lồi cuối tháng'; icon = '🌖'; }
-    else if (age < 23.1) { phase = 'Trăng hạ huyền'; icon = '🌗'; }
-    else if (age < 28.4) { phase = 'Trăng khuyết cuối tháng'; icon = '🌘'; }
-    else { phase = 'Trăng mới'; icon = '🌑'; }
+    if (phaseValue != null) {
+      if (phaseValue <= 0.02 || phaseValue >= 0.98) { phase = 'Trăng mới'; icon = '🌑'; }
+      else if (phaseValue < 0.25) { phase = 'Trăng khuyết đầu tháng'; icon = '🌒'; }
+      else if (phaseValue <= 0.27) { phase = 'Trăng thượng huyền'; icon = '🌓'; }
+      else if (phaseValue < 0.5) { phase = 'Trăng lồi đầu tháng'; icon = '🌔'; }
+      else if (phaseValue <= 0.52) { phase = 'Trăng tròn'; icon = '🌕'; }
+      else if (phaseValue < 0.75) { phase = 'Trăng lồi cuối tháng'; icon = '🌖'; }
+      else if (phaseValue <= 0.77) { phase = 'Trăng hạ huyền'; icon = '🌗'; }
+      else { phase = 'Trăng khuyết cuối tháng'; icon = '🌘'; }
+    } else {
+      if (age < 1.1) { phase = 'Trăng mới'; icon = '🌑'; }
+      else if (age < 6.4) { phase = 'Trăng khuyết đầu tháng'; icon = '🌒'; }
+      else if (age < 8.4) { phase = 'Trăng thượng huyền'; icon = '🌓'; }
+      else if (age < 13.7) { phase = 'Trăng lồi đầu tháng'; icon = '🌔'; }
+      else if (age < 15.8) { phase = 'Trăng tròn'; icon = '🌕'; }
+      else if (age < 21.1) { phase = 'Trăng lồi cuối tháng'; icon = '🌖'; }
+      else if (age < 23.1) { phase = 'Trăng hạ huyền'; icon = '🌗'; }
+      else if (age < 28.4) { phase = 'Trăng khuyết cuối tháng'; icon = '🌘'; }
+      else { phase = 'Trăng mới'; icon = '🌑'; }
+    }
 
     setTxt('moonAge', age.toFixed(1));
     setTxt('moonIllum', Math.round(illum) + '%');
     setTxt('moonPhaseName', phase);
     setTxt('moonPhaseVisual', icon);
 
-    const sr = new Date(RT.current?.sys?.sunrise * 1000 || Date.now());
-    const ss = new Date(RT.current?.sys?.sunset * 1000 || Date.now() + 12 * 3600 * 1000);
-    const mRise = new Date(sr.getTime() + (age / lunCycle) * 24 * 3600 * 1000);
-    const mSet = new Date(mRise.getTime() + 12 * 3600 * 1000);
     const fmt = d => d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    setTxt('moonRise', fmt(mRise));
-    setTxt('moonSetTime', fmt(mSet));
+    if (daily?.moonrise && daily?.moonset) {
+      setTxt('moonRise', fmt(new Date(daily.moonrise * 1000)));
+      setTxt('moonSetTime', fmt(new Date(daily.moonset * 1000)));
+    } else {
+      const sr = new Date(RT.current?.sys?.sunrise * 1000 || Date.now());
+      const mRise = new Date(sr.getTime() + (age / lunCycle) * 24 * 3600 * 1000);
+      const mSet = new Date(mRise.getTime() + 12 * 3600 * 1000);
+      setTxt('moonRise', fmt(mRise));
+      setTxt('moonSetTime', fmt(mSet));
+    }
   }
 
   function renderTide() {
@@ -297,7 +417,7 @@
       schedEl.innerHTML = `
       ` + schedule.sort((a,b) => a.time - b.time).map(s => `
         <div class="tide-item">
-          <span class="tide-type ${s.type === 'Lớn' ? 'tide-high' : 'tide-low'}">${s.type === 'Lớn' ? '▲ Nước lớn' : '▼ Nước ròng'}</span>
+          <span class="tide-type ${s.type === 'Lớn' ? 'tide-high' : 'tide-low'}">${s.type === 'Lớn' ? '▲ Triều lên' : '▼ Triều rút'}</span>
           <span class="tide-time">${s.time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
           <span class="tide-height">${s.h.toFixed(2)}m</span>
         </div>
@@ -361,6 +481,7 @@
 
     setTxt('heroCity', RT.name);
     setTxt('currentLocSub', `${RT.name} · Real-time`);
+    setTxt('heroSub', `${RT.name} · Real-time`);
 
     if (window.WARDS_COORDS) {
       const wRes = nearestWard(RT.lat, RT.lon);
@@ -417,7 +538,42 @@
     root.style.setProperty('--orb-radius', (50 + (tempC - 25) * 0.9) + 'px');
     root.style.setProperty('--orb-glow', `rgba(240,160,75,${0.25 + rPct * 0.45})`);
 
+    applyDynamicBackground(d);
     checkExtremeAlert();
+  }
+
+  function applyDynamicBackground(d) {
+    if (!d) return;
+    const root = document.documentElement;
+    const w = d.weather?.[0] || {};
+    const clouds = d.clouds?.all ?? 0;
+    const rain = d.rain?.['1h'] || d.rain?.['3h'] || 0;
+    const snow = d.snow?.['1h'] || 0;
+
+    let sky = 'clear';
+    const id = w.id || 800;
+    if (id >= 200 && id < 300) sky = 'storm';
+    else if (id >= 300 && id < 600) sky = 'rain';
+    else if (id >= 600 && id < 700) sky = 'snow';
+    else if (id >= 700 && id < 800) sky = 'mist';
+    else if (id === 800) sky = clouds > 20 ? 'cloudy' : 'clear';
+    else if (id > 800) sky = 'cloudy';
+
+    if ((rain + snow) >= 6) sky = 'storm';
+
+    const now = d.dt || Math.floor(Date.now() / 1000);
+    let isDay = true;
+    if (d.sys?.sunrise && d.sys?.sunset) {
+      isDay = now >= d.sys.sunrise && now < d.sys.sunset;
+    } else {
+      const hour = new Date().getHours();
+      isDay = hour >= 6 && hour < 18;
+    }
+
+    root.setAttribute('data-sky', sky);
+    root.setAttribute('data-day', isDay ? 'day' : 'night');
+    root.style.setProperty('--sky-cloud', Math.min(clouds / 100, 1));
+    root.style.setProperty('--sky-rain', Math.min((rain + snow) / 8, 1));
   }
   function getInterpolated24h() {
     const list = RT.forecast?.list;
@@ -456,7 +612,9 @@
       const tempC = item.temp;
       const temp = RT.dispT(tempC);
       const rain = Math.round((item.pop || 0) * 100);
-      const icon = weatherEmoji(item.weather?.id);
+      const isDay = isDayAt(item.dt);
+      const sunIcon = sunEventIcon(item.dt);
+      const icon = sunIcon || weatherEmojiDayNight(item.weather?.id, isDay);
       
       let tCls = 'h-warm';
       if (tempC < 25) tCls = 'h-cool';
@@ -484,6 +642,492 @@
     }).join('');
   }
 
+  function getCropsForWard(ward) {
+    const data = window.CROPS_BY_WARD || {};
+    const wards = data.wards || {};
+    const districts = data.districts || {};
+    if (ward?.id && wards[String(ward.id)]) return wards[String(ward.id)];
+    if (ward?.district && districts[ward.district]) return districts[ward.district];
+    return data.default || [];
+  }
+
+  function renderAquaAlert() {
+    const banner = $('aquaAlert');
+    if (!banner) return;
+
+    const items = getInterpolated24h();
+    if (!items.length || !RT.current) {
+      banner.hidden = true;
+      return;
+    }
+
+    const nextItems = items.slice(0, 12);
+    const hasStorm = nextItems.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
+    const hasWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 28);
+    const curRain = RT.current?.rain?.['1h'] || RT.current?.rain?.['3h'] || 0;
+    const hasRainCode = nextItems.some(i => (i.weather?.id || 0) >= 300 && (i.weather?.id || 0) < 600);
+    const hasHeavyRainCode = nextItems.some(i => (i.weather?.id || 0) >= 502 && (i.weather?.id || 0) < 600);
+    const hasHeavyRain = curRain >= 10 || nextItems.some(i => (i.pop || 0) >= 0.7) || hasHeavyRainCode;
+    const heatIndex = RT.current?.main?.feels_like ?? RT.current?.main?.temp ?? null;
+    const hasHeat = heatIndex != null && heatIndex >= 35;
+
+    const warnWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 22);
+    const warnRain = curRain >= 5 || nextItems.some(i => (i.pop || 0) >= 0.5) || hasRainCode;
+    const warnHeat = heatIndex != null && heatIndex >= 33;
+
+    const details = [];
+    if (hasStorm) details.push('Dông sét gây sốc nước, rủi ro tôm cá');
+    if (hasHeavyRain) details.push('Mưa lớn dễ làm giảm độ mặn đột ngột');
+    if (hasWind) details.push('Gió mạnh làm xáo trộn mặt nước, khó quản lý ao');
+    if (hasHeat) details.push('Nắng nóng làm tăng nhiệt nước, giảm oxy hòa tan');
+
+    const warnDetails = [];
+    if (!hasHeavyRain && warnRain) warnDetails.push('Có mưa/ẩm cao, dễ biến động độ mặn');
+    if (!hasWind && warnWind) warnDetails.push('Gió khá mạnh, cần theo dõi mặt nước');
+    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt tăng, theo dõi oxy hòa tan');
+
+    const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
+    const locLabel = wardInfo
+      ? `${wardInfo.name} · ${wardInfo.district}`
+      : (RT.name || 'Khu vực hiện tại');
+
+    if (details.length) {
+      banner.classList.remove('is-safe');
+      banner.classList.remove('is-warn');
+      banner.hidden = false;
+      banner.dataset.level = 'danger';
+      banner.dataset.message = details.join('; ');
+      banner.innerHTML =
+        `<strong>Khuyến cáo thủy sản</strong>: Có rủi ro trong 12 giờ tới.` +
+        `<div class="farm-detail">` +
+        details.map(d => `• ${d}`).join('<br>') +
+        `</div>` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    } else if (warnDetails.length) {
+      banner.classList.remove('is-warn');
+      banner.classList.add('is-safe');
+      banner.hidden = false;
+      banner.dataset.level = 'warn';
+      banner.dataset.message = warnDetails.join('; ');
+      banner.innerHTML =
+        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 12 giờ tới.` +
+        `<div class="farm-detail">` +
+        warnDetails.map(d => `• ${d}`).join('<br>') +
+        `</div>` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    } else {
+      banner.classList.remove('is-warn');
+      banner.classList.add('is-safe');
+      banner.hidden = false;
+      banner.dataset.level = 'ok';
+      banner.dataset.message = 'Ổn định';
+      banner.innerHTML =
+        `<strong>Thủy sản ổn định</strong>: Điều kiện thuận lợi 12 giờ tới.` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    }
+  }
+  function renderFarmAlert() {
+    const banner = $('farmAlert');
+    if (!banner) return;
+
+    const items = getInterpolated24h();
+    if (!items.length || !RT.current) {
+      banner.hidden = true;
+      return;
+    }
+
+    const nextItems = items.slice(0, 12);
+    const hasStorm = nextItems.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
+    const hasHeat = nextItems.some(i => i.temp >= 35);
+    const hasWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 28);
+    const curRain = RT.current?.rain?.['1h'] || RT.current?.rain?.['3h'] || 0;
+    const hasHeavyRain = curRain >= 10 || nextItems.some(i => (i.pop || 0) >= 0.7);
+
+    const warnHeat = nextItems.some(i => i.temp >= 33);
+    const warnWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 22);
+    const warnRain = curRain >= 5 || nextItems.some(i => (i.pop || 0) >= 0.5);
+
+    const details = [];
+    if (hasStorm) details.push('Dông sét (mã thời tiết 2xx)');
+    if (hasHeavyRain) details.push('Mưa lớn (≥10mm/h hoặc xác suất mưa ≥70%)');
+    if (hasWind) details.push('Gió mạnh (≥28 km/h)');
+    if (hasHeat) details.push('Nắng nóng (≥35°C)');
+
+    const warnDetails = [];
+    if (!hasHeavyRain && warnRain) warnDetails.push('Mưa vừa (≥5mm/h hoặc xác suất mưa ≥50%)');
+    if (!hasWind && warnWind) warnDetails.push('Gió khá mạnh (≥22 km/h)');
+    if (!hasHeat && warnHeat) warnDetails.push('Nắng nóng nhẹ (≥33°C)');
+
+    const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
+    const crops = getCropsForWard(wardInfo);
+    const locLabel = wardInfo
+      ? `${wardInfo.name} · ${wardInfo.district}`
+      : (RT.name || 'Khu vực hiện tại');
+
+    if (details.length) {
+      banner.classList.remove('is-safe');
+      banner.classList.remove('is-warn');
+      banner.hidden = false;
+      banner.dataset.level = 'danger';
+      banner.dataset.message = details.join('; ');
+      banner.innerHTML =
+        `<strong>Cảnh báo nông dân</strong>: Có điều kiện bất lợi trong 12 giờ tới.` +
+        `<div class="farm-detail">` +
+        details.map(d => `• ${d}`).join('<br>') +
+        `</div>` +
+        `${crops.length ? ` Cây trồng chính: ${crops.join(', ')}.` : ''}` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    } else if (warnDetails.length) {
+      banner.classList.remove('is-safe');
+      banner.classList.add('is-warn');
+      banner.hidden = false;
+      banner.dataset.level = 'warn';
+      banner.dataset.message = warnDetails.join('; ');
+      banner.innerHTML =
+        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 12 giờ tới.` +
+        `<div class="farm-detail">` +
+        warnDetails.map(d => `• ${d}`).join('<br>') +
+        `</div>` +
+        `${crops.length ? ` Cây trồng chính: ${crops.join(', ')}.` : ''}` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    } else {
+      banner.classList.remove('is-warn');
+      banner.classList.add('is-safe');
+      banner.hidden = false;
+      banner.dataset.level = 'ok';
+      banner.dataset.message = 'Ổn định';
+      banner.innerHTML =
+        `<strong>Thời tiết ổn định</strong>: Không có dấu hiệu nguy hiểm 12 giờ tới.` +
+        `${crops.length ? ` Cây trồng chính: ${crops.join(', ')}.` : ''}` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    }
+  }
+
+  function renderRoadAlert() {
+    const banner = $('roadAlert');
+    if (!banner) return;
+
+    const items = getInterpolated24h();
+    if (!items.length || !RT.current) {
+      banner.hidden = true;
+      return;
+    }
+
+    const nextItems = items.slice(0, 12);
+    const cur = RT.current;
+    const visibilityKm = cur.visibility != null ? (cur.visibility / 1000) : null;
+    const hasStorm = nextItems.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
+    const hasRainCode = nextItems.some(i => (i.weather?.id || 0) >= 300 && (i.weather?.id || 0) < 600);
+    const hasHeavyRainCode = nextItems.some(i => (i.weather?.id || 0) >= 502 && (i.weather?.id || 0) < 600);
+    const curRain = cur.rain?.['1h'] || cur.rain?.['3h'] || 0;
+    const hasHeavyRain = curRain >= 10 || nextItems.some(i => (i.pop || 0) >= 0.7) || hasHeavyRainCode;
+    const hasWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 28);
+    const hasHeat = nextItems.some(i => i.temp >= 35);
+    const hasLowVis = visibilityKm != null && visibilityKm < 2;
+
+    const warnWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 22);
+    const warnRain = curRain >= 5 || nextItems.some(i => (i.pop || 0) >= 0.5) || hasRainCode;
+    const warnHeat = nextItems.some(i => i.temp >= 33);
+    const warnVis = visibilityKm != null && visibilityKm < 4;
+
+    const details = [];
+    if (hasStorm) details.push('Dông sét, hạn chế di chuyển ngoài trời');
+    if (hasHeavyRain) details.push('Mưa lớn, đường trơn và ngập');
+    if (hasWind) details.push('Gió mạnh, chú ý cây đổ/biển báo');
+    if (hasHeat) details.push('Nắng nóng, dễ mất nước khi đi đường');
+    if (hasLowVis) details.push('Tầm nhìn thấp (<2 km), cần bật đèn');
+
+    const warnDetails = [];
+    if (!hasHeavyRain && warnRain) warnDetails.push('Có mưa, đường trơn');
+    if (!hasWind && warnWind) warnDetails.push('Gió khá mạnh');
+    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt cao, đi đường nên che nắng');
+    if (!hasLowVis && warnVis) warnDetails.push('Tầm nhìn giảm (<4 km)');
+
+    const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
+    const locLabel = wardInfo
+      ? `${wardInfo.name} · ${wardInfo.district}`
+      : (RT.name || 'Khu vực hiện tại');
+
+    if (details.length) {
+      banner.classList.remove('is-safe');
+      banner.classList.remove('is-warn');
+      banner.hidden = false;
+      banner.dataset.level = 'danger';
+      banner.dataset.message = details.join('; ');
+      banner.innerHTML =
+        `<strong>Khuyến cáo khi ra đường</strong>: Có nguy cơ trong 12 giờ tới.` +
+        `<div class="farm-detail">` +
+        details.map(d => `• ${d}`).join('<br>') +
+        `</div>` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    } else if (warnDetails.length) {
+      banner.classList.remove('is-safe');
+      banner.classList.add('is-warn');
+      banner.hidden = false;
+      banner.dataset.level = 'warn';
+      banner.dataset.message = warnDetails.join('; ');
+      banner.innerHTML =
+        `<strong>Cảnh báo</strong>: Có tín hiệu cần theo dõi trong 12 giờ tới.` +
+        `<div class="farm-detail">` +
+        warnDetails.map(d => `• ${d}`).join('<br>') +
+        `</div>` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    } else {
+      banner.classList.remove('is-warn');
+      banner.classList.add('is-safe');
+      banner.hidden = false;
+      banner.dataset.level = 'ok';
+      banner.dataset.message = 'Ổn định';
+      banner.innerHTML =
+        `<strong>Điều kiện đi đường ổn định</strong>: 12 giờ tới nhìn chung thuận lợi.` +
+        `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
+    }
+  }
+
+  function renderRoadDashboard() {
+    const table = $('roadDashTable');
+    if (!table || !RT.current) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    const next = getInterpolated24h().slice(0, 12);
+    const cur = RT.current;
+    const curTemp = cur.main?.temp ?? null;
+    const curWind = mps2kmh(cur.wind?.speed || 0);
+    const curRain = cur.rain?.['1h'] || cur.rain?.['3h'] || 0;
+    const curPop = Math.round(((RT.forecast?.list?.[0]?.pop ?? 0) * 100));
+    const visibilityKm = cur.visibility != null ? (cur.visibility / 1000) : null;
+
+    const maxTemp = next.length ? Math.max(...next.map(i => i.temp)) : curTemp;
+    const maxWind = next.length ? Math.max(...next.map(i => mps2kmh(i.wind || 0))) : curWind;
+    const maxPop = next.length ? Math.max(...next.map(i => Math.round((i.pop || 0) * 100))) : curPop;
+    const hasStorm = next.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
+
+    const rows = [
+      {
+        name: 'Mưa',
+        threshold: '≥10mm/h hoặc ≥70%',
+        current: `${curRain.toFixed(1)} mm/h · ${curPop}%`,
+        trend: `Trong 12 giờ tới: max POP ${maxPop}%`,
+        level: (curRain >= 10 || maxPop >= 70) ? 'danger' : (maxPop >= 50 ? 'warn' : 'ok'),
+        advice: (curRain >= 10 || maxPop >= 70) ? 'Hạn chế đi đường, dễ ngập' : 'Theo dõi mưa'
+      },
+      {
+        name: 'Gió',
+        threshold: '≥28 km/h',
+        current: `${curWind} km/h`,
+        trend: `Trong 12 giờ tới: cao nhất ${maxWind} km/h`,
+        level: maxWind >= 28 ? 'danger' : (maxWind >= 22 ? 'warn' : 'ok'),
+        advice: maxWind >= 28 ? 'Đi chậm, tránh cây lớn' : 'Theo dõi gió'
+      },
+      {
+        name: 'Dông sét',
+        threshold: 'Mã 2xx',
+        current: hasStorm ? 'Có dông' : 'Không',
+        trend: hasStorm ? 'Trong 12 giờ tới: có khả năng dông' : 'Trong 12 giờ tới: ổn định',
+        level: hasStorm ? 'danger' : 'ok',
+        advice: hasStorm ? 'Tránh di chuyển ngoài trời' : 'Bình thường'
+      },
+      {
+        name: 'Tầm nhìn',
+        threshold: '<2 km',
+        current: visibilityKm != null ? `${visibilityKm.toFixed(1)} km` : '—',
+        trend: visibilityKm != null ? `Trong 12 giờ tới: ~${visibilityKm.toFixed(1)} km` : '—',
+        level: visibilityKm != null && visibilityKm < 2 ? 'danger' : (visibilityKm != null && visibilityKm < 4 ? 'warn' : 'ok'),
+        advice: visibilityKm != null && visibilityKm < 4 ? 'Bật đèn, đi chậm' : 'Bình thường'
+      },
+      {
+        name: 'Nắng nóng',
+        threshold: '≥35°C',
+        current: curTemp != null ? `${curTemp.toFixed(1)}°C` : '—',
+        trend: maxTemp != null ? `Trong 12 giờ tới: cao nhất ${maxTemp.toFixed(1)}°C` : '—',
+        level: maxTemp != null && maxTemp >= 35 ? 'danger' : (maxTemp != null && maxTemp >= 33 ? 'warn' : 'ok'),
+        advice: maxTemp != null && maxTemp >= 35 ? 'Che nắng, tránh say nắng' : 'Bình thường'
+      },
+      {
+        name: 'Đường trơn',
+        threshold: 'Có mưa',
+        current: curRain > 0 ? 'Đang mưa/ẩm' : 'Khô ráo',
+        trend: maxPop >= 50 ? 'Trong 12 giờ tới: có mưa' : 'Trong 12 giờ tới: ít mưa',
+        level: (curRain > 0 || maxPop >= 50) ? 'warn' : 'ok',
+        advice: (curRain > 0 || maxPop >= 50) ? 'Giữ khoảng cách an toàn' : 'Bình thường'
+      }
+    ];
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.name}</td>
+        <td>${r.threshold}</td>
+        <td>${r.current}</td>
+        <td>${r.trend}</td>
+        <td><span class="dash-badge ${r.level}">${r.level === 'danger' ? 'Nguy hiểm' : r.level === 'warn' ? 'Cảnh báo' : 'Ổn định'}</span></td>
+        <td>${r.advice}</td>
+      </tr>
+    `).join('');
+  }
+  function renderFarmDashboard() {
+    const table = $('farmDashTable');
+    if (!table || !RT.current) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    const next = getInterpolated24h().slice(0, 12);
+    const cur = RT.current;
+    const curTemp = cur.main?.temp ?? null;
+    const curFeels = cur.main?.feels_like ?? null;
+    const curWind = mps2kmh(cur.wind?.speed || 0);
+    const curRain = cur.rain?.['1h'] || cur.rain?.['3h'] || 0;
+    const curPop = Math.round(((RT.forecast?.list?.[0]?.pop ?? 0) * 100));
+
+    const maxTemp = next.length ? Math.max(...next.map(i => i.temp)) : curTemp;
+    const maxWind = next.length ? Math.max(...next.map(i => mps2kmh(i.wind || 0))) : curWind;
+    const maxPop = next.length ? Math.max(...next.map(i => Math.round((i.pop || 0) * 100))) : curPop;
+    const hasStorm = next.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
+
+    const rows = [
+      {
+        name: 'Nắng nóng',
+        threshold: '≥35°C',
+        current: curTemp != null ? `${curTemp.toFixed(1)}°C` : '—',
+        trend: maxTemp != null ? `Trong 12 giờ tới: cao nhất ${maxTemp.toFixed(1)}°C` : '—',
+        level: maxTemp != null && maxTemp >= 35 ? 'danger' : (maxTemp != null && maxTemp >= 33 ? 'warn' : 'ok'),
+        advice: maxTemp >= 35 ? 'Tưới tăng ẩm, che phủ cây' : 'Theo dõi nhiệt độ'
+      },
+      {
+        name: 'Mưa lớn',
+        threshold: '≥10mm/h hoặc ≥70%',
+        current: `${curRain.toFixed(1)} mm/h · ${curPop}%`,
+        trend: `Trong 12 giờ tới: max POP ${maxPop}%`,
+        level: (curRain >= 10 || maxPop >= 70) ? 'danger' : (maxPop >= 50 ? 'warn' : 'ok'),
+        advice: (curRain >= 10 || maxPop >= 70) ? 'Chủ động thoát nước' : 'Theo dõi mưa'
+      },
+      {
+        name: 'Gió mạnh',
+        threshold: '≥28 km/h',
+        current: `${curWind} km/h`,
+        trend: `Trong 12 giờ tới: cao nhất ${maxWind} km/h`,
+        level: maxWind >= 28 ? 'danger' : (maxWind >= 22 ? 'warn' : 'ok'),
+        advice: maxWind >= 28 ? 'Gia cố giàn, cọc' : 'Theo dõi gió'
+      },
+      {
+        name: 'Dông sét',
+        threshold: 'Mã 2xx',
+        current: hasStorm ? 'Có dông' : 'Không',
+        trend: hasStorm ? 'Trong 12 giờ tới: có khả năng dông' : 'Trong 12 giờ tới: ổn định',
+        level: hasStorm ? 'danger' : 'ok',
+        advice: hasStorm ? 'Tránh phun xịt/ra đồng' : 'Bình thường'
+      },
+      {
+        name: 'Cảm giác nóng',
+        threshold: '≥35°C',
+        current: curFeels != null ? `${curFeels.toFixed(1)}°C` : '—',
+        trend: maxTemp != null ? `Trong 12 giờ tới: tương tự ${maxTemp.toFixed(1)}°C` : '—',
+        level: curFeels != null && curFeels >= 35 ? 'danger' : (curFeels != null && curFeels >= 33 ? 'warn' : 'ok'),
+        advice: curFeels != null && curFeels >= 35 ? 'Giảm làm việc ngoài trời' : 'Theo dõi'
+      },
+      {
+        name: 'Độ ẩm',
+        threshold: '≥85%',
+        current: cur.main?.humidity != null ? `${cur.main.humidity}%` : '—',
+        trend: next.length ? `Trong 12 giờ tới: TB ~${Math.round(next.reduce((a, i) => a + (i.weather ? (i.weather.humidity || 0) : 0), 0) / Math.max(next.length, 1))}%` : '—',
+        level: (cur.main?.humidity ?? 0) >= 85 ? 'warn' : 'ok',
+        advice: (cur.main?.humidity ?? 0) >= 85 ? 'Theo dõi nấm bệnh' : 'Bình thường'
+      }
+    ];
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.name}</td>
+        <td>${r.threshold}</td>
+        <td>${r.current}</td>
+        <td>${r.trend}</td>
+        <td><span class="dash-badge ${r.level}">${r.level === 'danger' ? 'Nguy hiểm' : r.level === 'warn' ? 'Cảnh báo' : 'Ổn định'}</span></td>
+        <td>${r.advice}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderAquaDashboard() {
+    const table = $('aquaDashTable');
+    if (!table || !RT.current) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    const next = getInterpolated24h().slice(0, 12);
+    const cur = RT.current;
+    const curTemp = cur.main?.temp ?? null;
+    const curFeels = cur.main?.feels_like ?? null;
+    const curWind = mps2kmh(cur.wind?.speed || 0);
+    const curRain = cur.rain?.['1h'] || cur.rain?.['3h'] || 0;
+    const curPop = Math.round(((RT.forecast?.list?.[0]?.pop ?? 0) * 100));
+
+    const maxTemp = next.length ? Math.max(...next.map(i => i.temp)) : curTemp;
+    const maxWind = next.length ? Math.max(...next.map(i => mps2kmh(i.wind || 0))) : curWind;
+    const maxPop = next.length ? Math.max(...next.map(i => Math.round((i.pop || 0) * 100))) : curPop;
+    const hasStorm = next.some(i => (i.weather?.id || 0) >= 200 && (i.weather?.id || 0) < 300);
+
+    const rows = [
+      {
+        name: 'Mưa lớn',
+        threshold: '≥10mm/h hoặc ≥70%',
+        current: `${curRain.toFixed(1)} mm/h · ${curPop}%`,
+        trend: `Trong 12 giờ tới: max POP ${maxPop}%`,
+        level: (curRain >= 10 || maxPop >= 70) ? 'danger' : (maxPop >= 50 ? 'warn' : 'ok'),
+        advice: (curRain >= 10 || maxPop >= 70) ? 'Theo dõi độ mặn/thoát nước' : 'Bình thường'
+      },
+      {
+        name: 'Gió mạnh',
+        threshold: '≥28 km/h',
+        current: `${curWind} km/h`,
+        trend: `Trong 12 giờ tới: cao nhất ${maxWind} km/h`,
+        level: maxWind >= 28 ? 'danger' : (maxWind >= 22 ? 'warn' : 'ok'),
+        advice: maxWind >= 28 ? 'Hạn chế cho ăn, gia cố bờ' : 'Theo dõi gió'
+      },
+      {
+        name: 'Dông sét',
+        threshold: 'Mã 2xx',
+        current: hasStorm ? 'Có dông' : 'Không',
+        trend: hasStorm ? 'Trong 12 giờ tới: có khả năng dông' : 'Trong 12 giờ tới: ổn định',
+        level: hasStorm ? 'danger' : 'ok',
+        advice: hasStorm ? 'Tránh vận hành điện ngoài trời' : 'Bình thường'
+      },
+      {
+        name: 'Nhiệt nước',
+        threshold: '≥32°C',
+        current: curTemp != null ? `${curTemp.toFixed(1)}°C` : '—',
+        trend: maxTemp != null ? `Trong 12 giờ tới: cao nhất ${maxTemp.toFixed(1)}°C` : '—',
+        level: maxTemp != null && maxTemp >= 32 ? 'warn' : 'ok',
+        advice: maxTemp != null && maxTemp >= 32 ? 'Tăng sục khí/che mát' : 'Bình thường'
+      },
+      {
+        name: 'Cảm giác nóng',
+        threshold: '≥35°C',
+        current: curFeels != null ? `${curFeels.toFixed(1)}°C` : '—',
+        trend: maxTemp != null ? `Trong 12 giờ tới: tương tự ${maxTemp.toFixed(1)}°C` : '—',
+        level: curFeels != null && curFeels >= 35 ? 'danger' : (curFeels != null && curFeels >= 33 ? 'warn' : 'ok'),
+        advice: curFeels != null && curFeels >= 35 ? 'Giảm cho ăn, theo dõi oxy' : 'Theo dõi'
+      },
+      {
+        name: 'Độ ẩm',
+        threshold: '≥85%',
+        current: cur.main?.humidity != null ? `${cur.main.humidity}%` : '—',
+        trend: next.length ? `Trong 12 giờ tới: TB ~${Math.round(next.reduce((a, i) => a + (i.weather ? (i.weather.humidity || 0) : 0), 0) / Math.max(next.length, 1))}%` : '—',
+        level: (cur.main?.humidity ?? 0) >= 85 ? 'warn' : 'ok',
+        advice: (cur.main?.humidity ?? 0) >= 85 ? 'Theo dõi bệnh nấm/vi khuẩn' : 'Bình thường'
+      }
+    ];
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.name}</td>
+        <td>${r.threshold}</td>
+        <td>${r.current}</td>
+        <td>${r.trend}</td>
+        <td><span class="dash-badge ${r.level}">${r.level === 'danger' ? 'Nguy hiểm' : r.level === 'warn' ? 'Cảnh báo' : 'Ổn định'}</span></td>
+        <td>${r.advice}</td>
+      </tr>
+    `).join('');
+  }
   function renderDailyChart() {
     const canvas = $('tempChart');
     if (!canvas) return;
@@ -1015,6 +1659,13 @@ function checkUVAlert(uvi) {
 
       renderHero();
       renderHourly();
+      renderFarmAlert();
+      renderAquaAlert();
+      renderRoadAlert();
+      renderFarmDashboard();
+      renderAquaDashboard();
+      renderRoadDashboard();
+      notifyIfNeeded();
       renderDailyChart();
       renderForecast7Day();
     renderDetails();
@@ -1112,7 +1763,6 @@ function checkUVAlert(uvi) {
       sec.innerHTML = `
         <header class="block-head comp-section__head">
           <h2 class="block-title comp-section__title">Lịch sử 7 ngày qua</h2>
-          <button id="rt-history-refresh" class="rt-text-btn">↻ Làm mới</button>
         </header>
         <div class="card rt-history-card">
           <table class="rt-history-table">
@@ -1131,7 +1781,6 @@ function checkUVAlert(uvi) {
       const sunSec = Array.from(mainFlow.querySelectorAll('.block'))
         .find(s => s.querySelector('.sun-card'));
       sunSec ? sunSec.after(sec) : mainFlow.appendChild(sec);
-      $('rt-history-refresh')?.addEventListener('click', buildHistory);
     }
 
     const footer = qs('.site-footer');
@@ -1408,6 +2057,12 @@ function checkUVAlert(uvi) {
 
     window.WARDS = WARDS_DATA;
     window.WARDS_COORDS = WARDS_DATA;
+    const DISTRICT_ORDER = [
+      'TP. Cà Mau', 'U Minh', 'Thới Bình', 'Trần Văn Thời', 'Cái Nước', 'Đầm Dơi',
+      'Năm Căn', 'Phú Tân', 'Ngọc Hiển',
+      'TP. Bạc Liêu', 'Hòa Bình', 'Vĩnh Lợi', 'Hồng Dân', 'Phước Long', 'TX. Giá Rai', 'Đông Hải'
+    ];
+    const districtRank = new Map(DISTRICT_ORDER.map((d, i) => [d, i]));
 
     let currentFilter = 'all';
 
@@ -1427,9 +2082,15 @@ function checkUVAlert(uvi) {
         const q = query.toLowerCase();
         items = items.filter(w =>
           w.name.toLowerCase().includes(q) || w.district.toLowerCase().includes(q));
-      } else if (filter === 'all') {
-        const suggestedIds = [1, 33, 13, 28, 64, 80];
-        items = WARDS_DATA.filter(w => suggestedIds.includes(w.id));
+      }
+
+      if (!(isSearchEmpty && filter === 'all')) {
+        items = items.slice().sort((a, b) => {
+          const ra = districtRank.has(a.district) ? districtRank.get(a.district) : 999;
+          const rb = districtRank.has(b.district) ? districtRank.get(b.district) : 999;
+          if (ra !== rb) return ra - rb;
+          return a.name.localeCompare(b.name, 'vi');
+        });
       }
 
       if (!items.length) {
@@ -1442,11 +2103,7 @@ function checkUVAlert(uvi) {
         return;
       }
 
-      if (isSearchEmpty && filter === 'all') {
-        results.innerHTML = `<div class="search-suggest-label">Gợi ý phổ biến</div>` + generateList(items);
-      } else {
-        results.innerHTML = generateList(items);
-      }
+      results.innerHTML = generateList(items);
 
       function generateList(list) {
         return list.map((w, idx) => `
@@ -2095,6 +2752,8 @@ function checkUVAlert(uvi) {
     initThemeToggle();
     injectCSS();
     injectHTML();
+    setupNotifications();
+    await loadCropsData();
     patchSelectWard();
     startLiveClock();
     initGPSButton();
