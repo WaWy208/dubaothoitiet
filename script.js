@@ -689,7 +689,7 @@
 
     const warnWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 22);
     const warnRain = curRain >= 5 || nextItems.some(i => (i.pop || 0) >= 0.5) || hasRainCode;
-    const warnHeat = heatIndex != null && heatIndex >= 33;
+    const warnHeat = heatIndex != null && heatIndex >= 31;
 
     const details = [];
     if (hasStorm) details.push('Dông sét gây sốc nước, rủi ro tôm cá');
@@ -700,7 +700,7 @@
     const warnDetails = [];
     if (!hasHeavyRain && warnRain) warnDetails.push('Có mưa/ẩm cao, dễ biến động độ mặn');
     if (!hasWind && warnWind) warnDetails.push('Gió khá mạnh, cần theo dõi mặt nước');
-    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt tăng, theo dõi oxy hòa tan');
+    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt tăng (≥31°C), theo dõi oxy hòa tan');
 
     const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
     const locLabel = wardInfo
@@ -843,7 +843,7 @@
 
     const warnWind = nextItems.some(i => mps2kmh(i.wind || 0) >= 22);
     const warnRain = curRain >= 5 || nextItems.some(i => (i.pop || 0) >= 0.5) || hasRainCode;
-    const warnHeat = nextItems.some(i => i.temp >= 33);
+    const warnHeat = nextItems.some(i => i.temp >= 31);
     const warnVis = visibilityKm != null && visibilityKm < 4;
 
     const details = [];
@@ -856,7 +856,7 @@
     const warnDetails = [];
     if (!hasHeavyRain && warnRain) warnDetails.push('Có mưa, đường trơn');
     if (!hasWind && warnWind) warnDetails.push('Gió khá mạnh');
-    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt cao (≥32°C), đi đường nên che nắng trong 12 giờ tới');
+    if (!hasHeat && warnHeat) warnDetails.push('Nhiệt cao (≥31°C), đi đường nên che nắng trong 12 giờ tới');
     if (!hasLowVis && warnVis) warnDetails.push('Tầm nhìn giảm (<4 km)');
 
     const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
@@ -954,11 +954,11 @@
       },
       {
         name: 'Nắng nóng',
-        threshold: '≥35°C',
+        threshold: '≥31°C',
         current: curTemp != null ? `${curTemp.toFixed(1)}°C` : '—',
         trend: maxTemp != null ? `Trong 12 giờ tới: cao nhất ${maxTemp.toFixed(1)}°C` : '—',
-        level: maxTemp != null && maxTemp >= 35 ? 'danger' : (maxTemp != null && maxTemp >= 33 ? 'warn' : 'ok'),
-        advice: maxTemp != null && maxTemp >= 35 ? 'Che nắng, tránh say nắng' : 'Bình thường'
+        level: maxTemp != null && maxTemp >= 35 ? 'danger' : (maxTemp != null && maxTemp >= 31 ? 'warn' : 'ok'),
+        advice: maxTemp != null && maxTemp >= 35 ? 'Che nắng, tránh say nắng' : (maxTemp != null && maxTemp >= 31 ? 'Hạn chế đi trưa, che nắng' : 'Bình thường')
       },
       {
         name: 'Đường trơn',
@@ -1109,11 +1109,11 @@
       },
       {
         name: 'Nhiệt nước',
-        threshold: '≥32°C',
+        threshold: '≥31°C',
         current: curTemp != null ? `${curTemp.toFixed(1)}°C` : '—',
         trend: maxTemp != null ? `Trong 12 giờ tới: cao nhất ${maxTemp.toFixed(1)}°C` : '—',
-        level: maxTemp != null && maxTemp >= 32 ? 'warn' : 'ok',
-        advice: maxTemp != null && maxTemp >= 32 ? 'Tăng sục khí/che mát' : 'Bình thường'
+        level: maxTemp != null && maxTemp >= 31 ? 'warn' : 'ok',
+        advice: maxTemp != null && maxTemp >= 31 ? 'Tăng sục khí/che mát' : 'Bình thường'
       },
       {
         name: 'Cảm giác nóng',
