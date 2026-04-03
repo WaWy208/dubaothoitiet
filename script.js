@@ -21,7 +21,9 @@
     isFahrenheit: localStorage.getItem('weatherUnit') === 'F',
     unit: () => RT.isFahrenheit ? 'F' : 'C',
     dispT: (c) => RT.unit() === 'F' ? Math.round(c * 9 / 5 + 32) : Math.round(c),
+    historyMeta: { ts: 0, lat: null, lon: null },
   };
+  const HISTORY_CACHE_KEY = 'rt_history_cache_v1';
   const $ = (id) => document.getElementById(id);
   const qs = (sel) => document.querySelector(sel);
   function weatherEmoji(code) {
@@ -412,10 +414,27 @@
 
     const schedEl = $('tideSchedule');
     if (schedEl) {
-      schedEl.innerHTML = `
-      ` + schedule.sort((a,b) => a.time - b.time).map(s => `
-        <div class="tide-item">
-          <span class="tide-type ${s.type === 'Lớn' ? 'tide-high' : 'tide-low'}">${s.type === 'Lớn' ? '▲ Triều lên' : '▼ Triều rút'}</span>
+      const stations = generateHydroData();
+      const tideStations = stations.filter(s => s.tide && s.tide !== 'N/A' && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+      const st = tideStations.length
+        ? tideStations.reduce((best, s) => {
+          const d = haversine(RT.lat, RT.lon, s.lat, s.lon);
+          return !best || d < best.dist ? { s, dist: d } : best;
+        }, null).s
+        : (stations[0] || null);
+      const isRising = st?.tide === 'Triều lên';
+      const levelNow = st?.waterLevel ? `${st.waterLevel}m` : '--';
+      const legend = `
+        <div class="tide-legend">
+          <span class="tide-legend-pill ${isRising ? 'tide-legend-pill--up' : 'tide-legend-pill--down'}">
+            ${isRising ? '▲ Triều lên' : '▼ Triều rút'} ${levelNow}
+          </span>
+          <span class="tide-legend-note">Theo trạm gần nhất: ${st?.name || '—'}</span>
+        </div>
+      `;
+      schedEl.innerHTML = legend + schedule.sort((a,b) => a.time - b.time).map(s => `
+        <div class="tide-item ${s.type === 'Lớn' ? 'tide-item--up' : 'tide-item--down'}">
+          <span class="tide-type">${s.type === 'Lớn' ? '▲ Triều lên' : '▼ Triều rút'}</span>
           <span class="tide-time">${s.time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
           <span class="tide-height">${s.h.toFixed(2)}m</span>
         </div>
@@ -501,10 +520,10 @@
     const needle = $('windNeedle');
     if (needle) needle.style.setProperty('--wind-deg', windDeg + 'deg');
 
-    setTxt('detailRainMm', (rain + snow).toFixed(1) + ' mm/h');
     const pop = RT.forecast?.list?.[0]?.pop ?? 0;
     const rainProb = Math.round(pop * 100);
-    setTxt('detailRainProb', `Xác suất mưa ${rainProb}%`);
+    setTxt('detailRainMm', `${rainProb}%`);
+    setTxt('detailRainProb', 'Khả năng mưa trong vài giờ tới');
     const rfill = $('rainBarFill');
     if (rfill) rfill.style.width = rainProb + '%';
 
@@ -1334,8 +1353,8 @@
       if ($('o3')) $('o3').textContent = ((comp.o3 || 0) / 1000).toFixed(3);
     }
 
-    setTxt('detailRainMm', rain.toFixed(1) + ' mm/h');
-    setTxt('detailRainProb', `Xác suất mưa ${rainProb}%`);
+    setTxt('detailRainMm', `${rainProb}%`);
+    setTxt('detailRainProb', 'Khả năng mưa trong vài giờ tới');
     const rfill = $('rainBarFill');
     if (rfill) rfill.style.width = rainProb + '%';
 
@@ -1468,67 +1487,200 @@ function checkUVAlert(uvi) {
       RT.dismissedAlerts.add(key);
     }, 14000);
   }
-  function buildHistory() {
+  async function buildHistory() {
     const cur = RT.current;
-    const fc = RT.forecast;
     if (!cur) return;
 
-    const baseTemp = cur.main?.temp ?? 31;
-    const baseHum = cur.main?.humidity ?? 82;
-    const baseWind = mps2kmh(cur.wind?.speed ?? 3);
+    const now = Date.now();
+    const sameDay = RT.historyMeta.ts
+      && new Date(RT.historyMeta.ts).toDateString() === new Date().toDateString();
+    const sameLoc = RT.historyMeta.lat != null && RT.historyMeta.lon != null
+      && Math.abs(RT.historyMeta.lat - RT.lat) < 0.01
+      && Math.abs(RT.historyMeta.lon - RT.lon) < 0.01;
+    if (sameDay && sameLoc && RT.history?.length === 7) {
+      renderHistory();
+      return;
+    }
 
-    RT.history = [];
+    const days = [];
     for (let i = 6; i >= 0; i--) {
       const dt = new Date();
+      dt.setHours(12, 0, 0, 0);
       dt.setDate(dt.getDate() - i);
+      days.push(dt);
+    }
+
+    const locKey = historyLocKey(RT.lat, RT.lon);
+    const cache = loadHistoryCache();
+    const cachedDays = cache?.[locKey]?.days || {};
+
+    const results = await Promise.allSettled(days.map(d => fetchHistoryDay(d)));
+
+    RT.history = results.map((res, idx) => {
+      const dt = days[idx];
+      const dKey = dateKey(dt);
+      const cached = cachedDays[dKey] || null;
       const wk = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][dt.getDay()];
-      const lbl = i === 0
+      const lbl = idx === 6
         ? 'Hôm nay'
         : `${wk} ${dt.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' })}`;
 
-      if (i === 0) {
-        RT.history.push({
+      if (res.status === 'fulfilled' && res.value) {
+        saveHistoryDay(cache, locKey, dKey, res.value);
+        return {
           label: lbl,
-          hi: Math.round(cur.main?.temp_max ?? baseTemp + 2),
-          lo: Math.round(cur.main?.temp_min ?? baseTemp - 3),
-          rain: Math.round((fc?.list?.[0]?.pop ?? 0) * 100),
-          humidity: baseHum,
-          wind: baseWind,
-          icon: weatherEmoji(cur.weather?.[0]?.id),
-          source: 'live',
-        });
-      } else {
-        const ph = i * 1.47;
-        const vr = Math.sin(ph) * 2.4;
-        const rb = 55 + Math.sin(ph * 0.8) * 35;
-        RT.history.push({
-          label: lbl,
-          hi: Math.round(baseTemp + Math.abs(vr) + 1.5),
-          lo: Math.round(baseTemp - Math.abs(vr) - 2),
-          rain: Math.max(0, Math.min(100, Math.round(rb))),
-          humidity: Math.max(60, Math.min(98, Math.round(baseHum + vr * 1.5))),
-          wind: Math.max(5, Math.round(baseWind + vr)),
-          icon: rb > 70 ? '🌧️' : rb > 40 ? '🌤️' : '☀️',
-          source: 'estimate',
-        });
+          hi: res.value.hi,
+          lo: res.value.lo,
+          rain: res.value.rain,
+          humidity: res.value.humidity,
+          wind: res.value.wind,
+          icon: res.value.icon,
+          source: idx === 6 ? 'live' : 'api',
+        };
       }
-    }
+
+      if (cached) {
+        return {
+          label: lbl,
+          hi: cached.hi,
+          lo: cached.lo,
+          rain: cached.rain,
+          humidity: cached.humidity,
+          wind: cached.wind,
+          icon: cached.icon,
+          source: 'cache',
+        };
+      }
+
+      const baseTemp = cur.main?.temp ?? 31;
+      return {
+        label: lbl,
+        hi: Math.round(cur.main?.temp_max ?? baseTemp + 2),
+        lo: Math.round(cur.main?.temp_min ?? baseTemp - 3),
+        rain: null,
+        humidity: cur.main?.humidity ?? null,
+        wind: mps2kmh(cur.wind?.speed ?? 0),
+        icon: weatherEmoji(cur.weather?.[0]?.id),
+        source: 'fallback',
+      };
+    });
+
+    RT.historyMeta = { ts: now, lat: RT.lat, lon: RT.lon };
+    persistHistoryCache(cache);
     renderHistory();
+  }
+
+  function historyLocKey(lat, lon) {
+    const la = Number.isFinite(lat) ? lat.toFixed(2) : '0.00';
+    const lo = Number.isFinite(lon) ? lon.toFixed(2) : '0.00';
+    return `${la},${lo}`;
+  }
+
+  function dateKey(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function loadHistoryCache() {
+    try {
+      const raw = localStorage.getItem(HISTORY_CACHE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveHistoryDay(cache, locKey, dKey, value) {
+    if (!cache[locKey]) cache[locKey] = { days: {} };
+    cache[locKey].days[dKey] = {
+      hi: value.hi,
+      lo: value.lo,
+      rain: value.rain,
+      humidity: value.humidity,
+      wind: value.wind,
+      icon: value.icon,
+      ts: Date.now(),
+    };
+  }
+
+  function persistHistoryCache(cache) {
+    try {
+      Object.keys(cache || {}).forEach(k => {
+        const days = cache[k]?.days || {};
+        const keys = Object.keys(days).sort();
+        if (keys.length > 30) {
+          keys.slice(0, keys.length - 30).forEach(rm => delete days[rm]);
+        }
+      });
+      localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cache || {}));
+    } catch (_) {}
+  }
+
+  async function fetchHistoryDay(dateObj) {
+    const dtSec = Math.floor(dateObj.getTime() / 1000);
+    const url = new URL('https://api.openweathermap.org/data/3.0/onecall/timemachine');
+    url.searchParams.set('appid', OWM_KEY);
+    url.searchParams.set('units', 'metric');
+    url.searchParams.set('lang', 'vi');
+    url.searchParams.set('lat', RT.lat);
+    url.searchParams.set('lon', RT.lon);
+    url.searchParams.set('dt', dtSec);
+
+    const r = await fetch(url.toString(), { cache: 'no-store' });
+    if (!r.ok) throw new Error(`OWM timemachine HTTP ${r.status}`);
+    const data = await r.json();
+
+    const points = Array.isArray(data?.data) ? data.data
+      : Array.isArray(data?.hourly) ? data.hourly
+      : data?.current ? [data.current]
+      : [];
+
+    if (!points.length) return null;
+
+    const temps = [];
+    const hums = [];
+    const winds = [];
+    let rainSum = 0;
+    let iconId = null;
+
+    points.forEach(p => {
+      const t = p.temp ?? p.main?.temp;
+      if (typeof t === 'number') temps.push(t);
+      const h = p.humidity ?? p.main?.humidity;
+      if (typeof h === 'number') hums.push(h);
+      const ws = p.wind_speed ?? p.wind?.speed;
+      if (typeof ws === 'number') winds.push(ws);
+      const r1 = p.rain?.['1h'] ?? p.rain?.['3h'] ?? p.rain?.value;
+      if (typeof r1 === 'number') rainSum += r1;
+      if (!iconId && p.weather?.[0]?.id) iconId = p.weather[0].id;
+    });
+
+    const hi = temps.length ? Math.round(Math.max(...temps)) : null;
+    const lo = temps.length ? Math.round(Math.min(...temps)) : null;
+    const humidity = hums.length ? Math.round(hums.reduce((a, b) => a + b, 0) / hums.length) : null;
+    const wind = winds.length ? Math.round(mps2kmh(winds.reduce((a, b) => a + b, 0) / winds.length)) : null;
+    const rain = Number.isFinite(rainSum) ? Math.round(rainSum) : null;
+    const icon = weatherEmoji(iconId ?? 800);
+
+    return { hi, lo, humidity, wind, rain, icon };
   }
 
   function renderHistory() {
     const tbody = $('historyTableBody');
     if (!tbody) return;
     const su = RT.unit() === 'F' ? '°F' : '°C';
+    const fmtVal = (v, suffix = '') => (v === null || Number.isNaN(v)) ? '—' : `${v}${suffix}`;
     tbody.innerHTML = RT.history.map(r => `
       <tr${r.source === 'live' ? ' class="hist-live-row"' : ''}>
         <td class="hist-date">${r.label}${r.source === 'live' ? ' <span class="hist-live-tag">● Live</span>' : ''}</td>
         <td>${r.icon}</td>
-        <td class="td-hi">${RT.dispT(r.hi)}${su}</td>
-        <td class="td-lo">${RT.dispT(r.lo)}${su}</td>
-        <td><span class="hist-rain-pill" style="--r:${r.rain}%">${r.rain}%</span></td>
-        <td class="hist-hum">${r.humidity}%</td>
-        <td class="hist-wind">${r.wind} km/h</td>
+        <td class="td-hi">${r.hi == null ? '—' : `${RT.dispT(r.hi)}${su}`}</td>
+        <td class="td-lo">${r.lo == null ? '—' : `${RT.dispT(r.lo)}${su}`}</td>
+        <td><span class="hist-rain-pill" style="--r:${r.rain ?? 0}%">${fmtVal(r.rain, '%')}</span></td>
+        <td class="hist-hum">${fmtVal(r.humidity, '%')}</td>
+        <td class="hist-wind">${r.wind == null ? '—' : `${r.wind} km/h`}</td>
       </tr>`).join('');
   }
   function initRadarMap() {
@@ -1666,7 +1818,7 @@ function checkUVAlert(uvi) {
       renderDailyChart();
       renderForecast7Day();
     renderDetails();
-      buildHistory();
+      await buildHistory();
 
       if (typeof window.renderForecastHome === 'function') window.renderForecastHome();
       if (typeof window.renderChart === 'function') window.renderChart();
@@ -1829,8 +1981,10 @@ function checkUVAlert(uvi) {
 
 .rt-radar-wrap { border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--border); }
 .rt-map-tabs {
-  display:flex; background:var(--bg-elevated);
+  display:flex; background:var(--surface);
   border-bottom:1px solid var(--border); overflow-x:auto; scrollbar-width:none;
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
 }
 .rt-map-tabs::-webkit-scrollbar { display:none; }
 .rt-map-btn {
@@ -1838,11 +1992,13 @@ function checkUVAlert(uvi) {
   color:var(--muted); font:600 12px var(--font); cursor:pointer;
   border-bottom:2px solid transparent; white-space:nowrap;
   transition:color .2s,border-color .2s,background .2s;
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
 }
 .rt-map-btn:hover { color:var(--text); }
 .rt-map-btn.active {
   color:var(--accent); border-bottom-color:var(--accent);
-  background:rgba(59,158,255,.06);
+  background:rgba(59,158,255,.12);
 }
 .rt-radar-map { height:380px; background:#090d14; }
 .leaflet-container { background:#090d14 !important; font-family:var(--font) !important; }
@@ -2368,6 +2524,7 @@ function checkUVAlert(uvi) {
     return [
       {
         id: 'S01', name: 'Trạm Sông Đốc', type: 'Thủy hải văn',
+        lat: 8.99, lon: 104.82,
         salinity: sinusoidal(18.5, 3.5, 0).toFixed(1),
         waterLevel: sinusoidal(1.85, 0.65, 0.5).toFixed(2),
         flowRate: Math.round(sinusoidal(120, 40, 1.0)),
@@ -2376,6 +2533,7 @@ function checkUVAlert(uvi) {
       },
       {
         id: 'S02', name: 'Trạm Gành Hào', type: 'Triều cường & Mặn',
+        lat: 9.11, lon: 105.44,
         salinity: sinusoidal(21.0, 4.0, 1.2).toFixed(1),
         waterLevel: sinusoidal(2.10, 0.70, 1.7).toFixed(2),
         flowRate: Math.round(sinusoidal(85, 30, 2.1)),
@@ -2384,6 +2542,7 @@ function checkUVAlert(uvi) {
       },
       {
         id: 'S03', name: 'Trạm Thới Bình', type: 'Nước ngọt & Phèn',
+        lat: 9.35, lon: 105.15,
         salinity: sinusoidal(0.4, 0.3, 2.5).toFixed(1),
         waterLevel: sinusoidal(0.75, 0.25, 2.8).toFixed(2),
         flowRate: Math.round(sinusoidal(45, 15, 3.2)),
@@ -2392,6 +2551,7 @@ function checkUVAlert(uvi) {
       },
       {
         id: 'S04', name: 'Trạm Năm Căn', type: 'Thủy hải văn',
+        lat: 8.82, lon: 105.05,
         salinity: sinusoidal(25.0, 5.0, 3.8).toFixed(1),
         waterLevel: sinusoidal(1.60, 0.55, 4.1).toFixed(2),
         flowRate: Math.round(sinusoidal(200, 60, 4.5)),
@@ -2400,6 +2560,7 @@ function checkUVAlert(uvi) {
       },
       {
         id: 'S05', name: 'Trạm Cà Mau', type: 'Khí tượng thủy văn',
+        lat: 9.18, lon: 105.15,
         salinity: sinusoidal(1.2, 0.5, 5.0).toFixed(1),
         waterLevel: sinusoidal(0.90, 0.30, 5.3).toFixed(2),
         flowRate: Math.round(sinusoidal(65, 20, 5.7)),
@@ -2707,47 +2868,14 @@ function checkUVAlert(uvi) {
     const themeBtn = $('themeBtn');
     const themeDropdown = $('themeDropdown');
     const root = document.documentElement;
-    if (!themeBtn || !themeDropdown) return;
+    const savedTheme = 'toweather';
+    root.setAttribute('data-theme', savedTheme);
+    localStorage.setItem('rt_theme', savedTheme);
 
-    const savedTheme = localStorage.getItem('rt_theme') || 'dark';
-    setTheme(savedTheme);
-
-    themeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const expanded = themeBtn.getAttribute('aria-expanded') === 'true';
-      themeBtn.setAttribute('aria-expanded', !expanded);
-      themeDropdown.classList.toggle('show');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!themeBtn.contains(e.target) && !themeDropdown.contains(e.target)) {
-        themeBtn.setAttribute('aria-expanded', 'false');
-        themeDropdown.classList.remove('show');
-      }
-    });
-
-    themeDropdown.querySelectorAll('.theme-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        const theme = e.currentTarget.dataset.t;
-        setTheme(theme);
-        themeBtn.setAttribute('aria-expanded', 'false');
-        themeDropdown.classList.remove('show');
-      });
-    });
-
-    function setTheme(t) {
-      root.setAttribute('data-theme', t);
-      localStorage.setItem('rt_theme', t);
-
-      const icon = $('themeIcon');
-      if (icon) icon.textContent = '';
-
-      themeDropdown.querySelectorAll('.theme-item').forEach(btn => {
-        if (btn.dataset.t === t) btn.classList.add('active');
-        else btn.classList.remove('active');
-      });
-    }
+    if (themeDropdown) themeDropdown.remove();
+    if (themeBtn) themeBtn.remove();
   }
+
 
   async function init() {
     initUnitToggle();
