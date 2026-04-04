@@ -349,6 +349,14 @@
               <div class="bar-fill bar-muted" id="cloudBarFill" style="width:65%;"></div>
             </div>
           </article>
+          <article class="detail-card comp-detail-card" id="salinityForecastCard">
+            <h3 class="detail-title">Độ mặn dự báo</h3>
+            <p class="detail-stat accent-warm" id="detailSalinity">—</p>
+            <p class="detail-note" id="detailSalinityNote">Theo trạm thủy văn</p>
+            <div class="bar-track">
+              <div class="bar-fill" id="salinityBarFill" style="width:0%; background-color:var(--warm);"></div>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -465,6 +473,22 @@
         </div>
       </section>
 
+      <section class="block comp-section" id="historySection">
+        <header class="block-head comp-section__head">
+          <h2 class="block-title comp-section__title">Biểu đồ lịch sử</h2>
+          <p class="block-sub comp-section__sub">Thống kê theo Tuần / Tháng từ Database</p>
+          <div class="history-controls" style="margin-top:10px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn-ghost active" id="btnHistoryWeek">Tuần</button>
+            <button class="btn-ghost" id="btnHistoryMonth">Tháng</button>
+          </div>
+        </header>
+        <div class="comp-chart-wrap">
+          <div class="chart-card comp-chart">
+            <canvas id="historyChart" width="800" height="200"></canvas>
+          </div>
+        </div>
+      </section>
+
       <section class="block comp-section" id="hydroSection">
         <header class="block-head comp-section__head">
           <h2 class="block-title comp-section__title">Trạm thủy văn</h2>
@@ -546,6 +570,7 @@
     </main>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="script.js"></script>
 
 </body>

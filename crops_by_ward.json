@@ -1,0 +1,18 @@
+{
+  "districts": {
+    "TP. Cà Mau": ["Lúa Hè Thu", "Rau màu"],
+    "U Minh": ["Lúa", "Tràm", "Mía"],
+    "Thới Bình": ["Lúa-Tôm", "Mía"],
+    "Trần Văn Thời": ["Lúa Đông Xuân", "Chuối", "Cá đồng"],
+    "Cái Nước": ["Tôm sú", "Tôm thẻ"],
+    "Đầm Dơi": ["Tôm quảng canh", "Cua"],
+    "Năm Căn": ["Tôm sinh thái", "Rừng ngập mặn"],
+    "Phú Tân": ["Tôm công nghiệp"],
+    "Ngọc Hiển": ["Tôm-Rừng", "Thủy sản hải sản"],
+    "TP. Bạc Liêu": ["Lúa", "Nhãn", "Tôm"],
+    "Vĩnh Lợi": ["Lúa", "Rau màu"],
+    "Hồng Dân": ["Lúa-Tôm"],
+    "Đông Hải": ["Muối", "Tôm"]
+  },
+  "default": ["Lúa", "Tôm", "Cây ăn trái"]
+}

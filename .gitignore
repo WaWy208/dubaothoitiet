@@ -1,0 +1,17 @@
+# Local development files
+backend/
+__pycache__/
+*.pyc
+.vscode/
+
+# Logs and temp files
+*.log
+tmp/
+C:\Users\admin\.gemini\antigravity\brain\
+
+# Node modules (nếu có dùng sau này)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
