@@ -2971,165 +2971,48 @@ function checkUVAlert(uvi) {
     const cc = $('comparisonChart');
     if (cc) ro.observe(cc);
 
-    initHistoryLogic();
+    initReportLogic();
 
     console.log(' Mô phỏng dự báo thời tiết Cà Mau — sẵn sàng (Cà Mau mới + cũ). °C/°F toggle restored!');
   }
 
-  function initHistoryLogic() {
-    setInterval(() => {
-      if (!RT.current) return;
-      const data = {
-        location: RT.name || "Unknown",
-        temperature: RT.current.main?.temp || 0,
-        humidity: RT.current.main?.humidity || 0,
-        rainfall: (RT.current.rain && (RT.current.rain['1h'] || RT.current.rain['3h'])) || 0
-      };
-      fetch('/api/weather', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).catch(err => console.log("Lưu DB lỗi (có thể backend chưa chạy):", err));
-    }, 300000); // 5 mins
-
-    setTimeout(() => {
-       if (RT.current) {
-          const data = {
-             location: RT.name || "Unknown",
-             temperature: RT.current.main?.temp || 0,
-             humidity: RT.current.main?.humidity || 0,
-             rainfall: (RT.current.rain && (RT.current.rain['1h'] || RT.current.rain['3h'])) || 0
-          };
-          fetch('/api/weather', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify(data)
-          }).catch(e => e);
-       }
-    }, 5000);
-
+  function initReportLogic() {
     async function autoSaveReport() {
-        const today = new Date().toISOString().split('T')[0];
-        if (localStorage.getItem('rt_last_report_date') === today) return;
-        if (!RT.current) return;
-        
-        const reportData = {
-          location: RT.name || "Unknown",
-          time: new Date().toISOString(),
-          current: {
-            temp: RT.current.main?.temp,
-            humidity: RT.current.main?.humidity,
-            desc: RT.current.weather?.[0]?.description,
-            wind: mps2kmh(RT.current.wind?.speed || 0)
-          }
-        };
-        try {
-          const res = await fetch('/api/save-report', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reportData)
-          });
-          if (res.ok) {
-            localStorage.setItem('rt_last_report_date', today);
-            console.log("Auto-saved daily report to Vercel Blob");
-          }
-        } catch (e) { console.log("Auto-save error:", e); }
+      const today = new Date().toISOString().split('T')[0];
+      if (localStorage.getItem('rt_last_report_date') === today) return;
+      if (!RT.current) return;
+
+      const reportData = {
+        location: RT.name || "Unknown",
+        time: new Date().toISOString(),
+        current: {
+          temp: RT.current.main?.temp,
+          humidity: RT.current.main?.humidity,
+          desc: RT.current.weather?.[0]?.description,
+          wind: mps2kmh(RT.current.wind?.speed || 0)
+        }
+      };
+      try {
+        const res = await fetch('/api/save-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(reportData)
+        });
+        if (res.ok) {
+          localStorage.setItem('rt_last_report_date', today);
+          console.log("Auto-saved daily report to Vercel Blob");
+        }
+      } catch (e) { console.log("Auto-save error:", e); }
     }
     setTimeout(autoSaveReport, 10000);
 
-    let historyChartInstance = null;
-    function fetchAndDrawHistory(period) {
-      const ctx = document.getElementById('historyChart');
-      if (!ctx || typeof Chart === 'undefined') return;
-      fetch(`/api/history?period=${period}`)
-        .then(res => res.json())
-        .then(data => {
-            const ctx = document.getElementById('historyChart');
-            if(!data || data.error || data.length === 0) {
-              // Hiển thị thông báo nếu chưa có dữ liệu
-              const canvasCtx = ctx.getContext('2d');
-              canvasCtx.clearRect(0, 0, ctx.width, ctx.height);
-              canvasCtx.font = "14px Inter";
-              canvasCtx.fillStyle = "#888";
-              canvasCtx.textAlign = "center";
-              canvasCtx.fillText("Đang thu thập dữ liệu ngày đầu tiên, vui lòng quay lại sau...", ctx.width / 2, ctx.height / 2);
-              return;
-            }
-            const labels = data.map(d => d.date);
-            const temps = data.map(d => d.avg_temp);
-            const hums = data.map(d => d.avg_hum);
-            const rains = data.map(d => d.total_rain);
-
-            if(historyChartInstance) historyChartInstance.destroy();
-            historyChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { type: 'line', label: 'Nhiệt độ (°C)', data: temps, borderColor: '#f0a04b', backgroundColor: '#f0a04b', yAxisID: 'y', tension: 0.3 },
-                        { type: 'line', label: 'Độ ẩm (%)', data: hums, borderColor: '#38bdf8', backgroundColor: '#38bdf8', yAxisID: 'y1', tension: 0.3, borderDash: [5, 5] },
-                        { type: 'bar', label: 'Lượng mưa (mm)', data: rains, backgroundColor: 'rgba(56, 189, 248, 0.5)', yAxisID: 'y1' }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { type: 'linear', position: 'left', ticks: { color: '#ccc' }, title: { display: true, text: 'Nhiệt độ', color: '#ccc' } },
-                        y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#ccc' }, title: { display: true, text: 'Độ ẩm / Mưa', color: '#ccc' } },
-                        x: { ticks: { color: '#ccc' } }
-                    },
-                    plugins: { legend: { labels: { color: '#eee' } } }
-                }
-            });
-        }).catch(err => console.log("Lỗi API history:", err));
-    }
-
-    window.fetchRawData = function() {
-      const tbody = document.getElementById('rawDataTableBody');
-      if(!tbody) return;
-      fetch('/api/raw-data')
-        .then(res => res.json())
-        .then(data => {
-          if(!data || data.error || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="padding:40px; text-align:center; color:#888;">Chưa có bản ghi nào.</td></tr>';
-            return;
-          }
-          tbody.innerHTML = data.map(r => `
-            <tr style="border-bottom: 1px solid #334155; height: 40px;">
-              <td style="padding: 8px 20px; color: #94a3b8;">${r.recorded_at}</td>
-              <td style="padding: 8px 20px;">${r.location_name}</td>
-              <td style="padding: 8px 20px; text-align: center; color: ${r.temperature > 30 ? '#f0a04b' : '#38bdf8'}">${r.temperature.toFixed(1)}</td>
-              <td style="padding: 8px 20px; text-align: center;">${r.humidity}%</td>
-              <td style="padding: 8px 20px; text-align: center; color: ${r.rainfall > 0 ? '#38bdf8' : '#666'}">${r.rainfall.toFixed(1)}</td>
-            </tr>
-          `).join('');
-        })
-        .catch(err => {
-          tbody.innerHTML = '<tr><td colspan="5" style="padding:40px; text-align:center; color: #ef4444;">Lỗi kết nối database.</td></tr>';
-        });
-    }
-
-    const btnWeek = document.getElementById('btnHistoryWeek');
-    const btnMonth = document.getElementById('btnHistoryMonth');
-    if(btnWeek && btnMonth) {
-      btnWeek.addEventListener('click', () => {
-         btnWeek.classList.add('active'); btnMonth.classList.remove('active');
-         fetchAndDrawHistory('week');
-      });
-      btnMonth.addEventListener('click', () => {
-         btnMonth.classList.add('active'); btnWeek.classList.remove('active');
-         fetchAndDrawHistory('month');
-      });
-    }
-
     const btnSave = document.getElementById('btnSaveReport');
-    if(btnSave) {
+    if (btnSave) {
       btnSave.addEventListener('click', async () => {
-        if(!RT.current) return;
+        if (!RT.current) return;
         btnSave.disabled = true;
         btnSave.textContent = "Đang lưu...";
-        
+
         const reportData = {
           location: RT.name || "Unknown",
           time: new Date().toISOString(),
@@ -3153,11 +3036,9 @@ function checkUVAlert(uvi) {
             body: JSON.stringify(reportData)
           });
           const result = await res.json();
-          if(result.url) {
+          if (result.url) {
             toast("Đã lưu bản tin lên Vercel Blob!", "success");
             console.log("Report URL:", result.url);
-            // Optionally open the report in a new tab
-            // window.open(result.url, '_blank');
           }
         } catch (err) {
           toast("Lỗi khi lưu báo cáo", "warn");
@@ -3167,11 +3048,6 @@ function checkUVAlert(uvi) {
         }
       });
     }
-
-    setTimeout(() => {
-        fetchAndDrawHistory('week');
-        window.fetchRawData();
-    }, 2500);
   }
 
   if (document.readyState === 'loading') {
