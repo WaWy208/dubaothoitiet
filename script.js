@@ -3085,6 +3085,31 @@ function checkUVAlert(uvi) {
         }).catch(err => console.log("Lỗi API history:", err));
     }
 
+    window.fetchRawData = function() {
+      const tbody = document.getElementById('rawDataTableBody');
+      if(!tbody) return;
+      fetch('/api/raw-data')
+        .then(res => res.json())
+        .then(data => {
+          if(!data || data.error || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="padding:40px; text-align:center; color:#888;">Chưa có bản ghi nào.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = data.map(r => `
+            <tr style="border-bottom: 1px solid #334155; height: 40px;">
+              <td style="padding: 8px 20px; color: #94a3b8;">${r.recorded_at}</td>
+              <td style="padding: 8px 20px;">${r.location_name}</td>
+              <td style="padding: 8px 20px; text-align: center; color: ${r.temperature > 30 ? '#f0a04b' : '#38bdf8'}">${r.temperature.toFixed(1)}</td>
+              <td style="padding: 8px 20px; text-align: center;">${r.humidity}%</td>
+              <td style="padding: 8px 20px; text-align: center; color: ${r.rainfall > 0 ? '#38bdf8' : '#666'}">${r.rainfall.toFixed(1)}</td>
+            </tr>
+          `).join('');
+        })
+        .catch(err => {
+          tbody.innerHTML = '<tr><td colspan="5" style="padding:40px; text-align:center; color: #ef4444;">Lỗi kết nối database.</td></tr>';
+        });
+    }
+
     const btnWeek = document.getElementById('btnHistoryWeek');
     const btnMonth = document.getElementById('btnHistoryMonth');
     if(btnWeek && btnMonth) {
@@ -3143,7 +3168,10 @@ function checkUVAlert(uvi) {
       });
     }
 
-    setTimeout(() => fetchAndDrawHistory('week'), 2500);
+    setTimeout(() => {
+        fetchAndDrawHistory('week');
+        window.fetchRawData();
+    }, 2500);
   }
 
   if (document.readyState === 'loading') {

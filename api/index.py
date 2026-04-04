@@ -128,6 +128,31 @@ def get_history():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/raw-data', methods=['GET'])
+def get_raw_data():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Lấy 50 bản ghi mới nhất
+        sql = """
+            SELECT recorded_at, location_name, temperature, humidity, rainfall 
+            FROM weather_history 
+            ORDER BY recorded_at DESC 
+            LIMIT 50
+        """
+        cursor.execute(sql)
+        records = cursor.fetchall()
+        
+        for r in records:
+            r['recorded_at'] = r['recorded_at'].strftime('%Y-%m-%d %H:%M:%S')
+            
+        cursor.close()
+        conn.close()
+        return jsonify(records), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Required for Vercel
 app.debug = False
 

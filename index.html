@@ -499,6 +499,34 @@
         </div>
       </section>
 
+      <section class="block comp-section" id="dataLogSection">
+        <header class="block-head comp-section__head" style="display: flex; justify-content: space-between; align-items: center; padding: 0 16px;">
+          <div>
+            <h2 class="block-title comp-section__title">Nhật ký dữ liệu thô</h2>
+            <p class="block-sub comp-section__sub">50 bản ghi mới nhất từ Database</p>
+          </div>
+          <button class="btn-ghost" onclick="fetchRawData()" style="border: 1px solid #444; padding: 6px 16px; font-size: 13px; border-radius: 6px; color: #fff;">Cập nhật</button>
+        </header>
+        <div class="data-log-wrap" style="overflow-x: auto; margin: 20px 16px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid #334155;">
+          <table style="width: 100%; border-collapse: collapse; color: #cbd5e1; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 2px solid #334155; height: 50px; background: rgba(15, 23, 42, 0.6); color: #f8fafc;">
+                <th style="padding: 12px 20px; text-align: left; font-weight: 600;">Thời gian</th>
+                <th style="padding: 12px 20px; text-align: left; font-weight: 600;">Vị trí</th>
+                <th style="padding: 12px 20px; text-align: center; font-weight: 600;">Nhiệt độ (°C)</th>
+                <th style="padding: 12px 20px; text-align: center; font-weight: 600;">Độ ẩm (%)</th>
+                <th style="padding: 12px 20px; text-align: center; font-weight: 600;">Lượng mưa (mm)</th>
+              </tr>
+            </thead>
+            <tbody id="rawDataTableBody">
+              <tr>
+                <td colspan="5" style="padding: 60px; text-align: center; color: #94a3b8; font-style: italic;">Đang tải dữ liệu...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <footer class="site-footer comp-footer">
         <div class="footer-grid">
           <div class="footer-col footer-brand">
