@@ -8,12 +8,34 @@ import os
 app = Flask(__name__)
 CORS(app)
 
+def init_db():
+    conn_str = os.environ.get('POSTGRES_URL')
+    if not conn_str: return
+    try:
+        conn = psycopg2.connect(conn_str)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS weather_history (
+                id SERIAL PRIMARY KEY,
+                location_name VARCHAR(255) NOT NULL,
+                temperature FLOAT,
+                humidity INT,
+                rainfall FLOAT,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"Database init error: {e}")
+
 def get_db_connection():
-    # Use Vercel Postgres environment variable
-    # Typically: postgres://default:password@ep-host-region.aws.neon.tech:5432/verceldb?sslmode=require
+    # Tự động khởi tạo bảng nếu chưa có
+    init_db()
+    
     conn_str = os.environ.get('POSTGRES_URL')
     if not conn_str:
-        # Fallback for local testing (cần setup postgres cục bộ nếu muốn chạy local)
         return psycopg2.connect(
             host="localhost",
             user="postgres",

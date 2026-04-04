@@ -3044,7 +3044,17 @@ function checkUVAlert(uvi) {
       fetch(`/api/history?period=${period}`)
         .then(res => res.json())
         .then(data => {
-            if(!data || data.error || data.length === 0) return;
+            const ctx = document.getElementById('historyChart');
+            if(!data || data.error || data.length === 0) {
+              // Hiển thị thông báo nếu chưa có dữ liệu
+              const canvasCtx = ctx.getContext('2d');
+              canvasCtx.clearRect(0, 0, ctx.width, ctx.height);
+              canvasCtx.font = "14px Inter";
+              canvasCtx.fillStyle = "#888";
+              canvasCtx.textAlign = "center";
+              canvasCtx.fillText("Đang thu thập dữ liệu ngày đầu tiên, vui lòng quay lại sau...", ctx.width / 2, ctx.height / 2);
+              return;
+            }
             const labels = data.map(d => d.date);
             const temps = data.map(d => d.avg_temp);
             const hums = data.map(d => d.avg_hum);
