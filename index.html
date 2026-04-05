@@ -169,6 +169,26 @@
           </div>
         </div>
       </section>
+
+      <section class="block comp-section" id="radarSection">
+        <header class="block-head comp-section__head">
+          <div class="block-title-row">
+            <h2 class="block-title comp-section__title">Radar Thời Tiết</h2>
+            <div class="live-badge"><span class="live-dot pulse"></span> LIVE</div>
+          </div>
+          <p class="block-sub comp-section__sub">Bản đồ vệ tinh khu vực hiện tại</p>
+          <div class="radar-controls">
+            <button class="rt-map-btn active" data-layer="precipitation_new">Mưa</button>
+            <button class="rt-map-btn" data-layer="wind_new">Gió</button>
+            <button class="rt-map-btn" data-layer="clouds_new">Mây</button>
+            <button class="rt-map-btn" data-layer="temp_new">Nhiệt độ</button>
+          </div>
+        </header>
+        <div class="card radar-card" style="padding:0; overflow:hidden;">
+          <div id="rt-radar-map" style="width: 100%; height: 380px; background: #0c1018;"></div>
+        </div>
+      </section>
+
       <section class="metrics comp-metrics" aria-label="Chỉ số hiện tại">
         <article class="metric-card comp-metric">
           <div class="comp-metric__icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -448,7 +468,46 @@
               </div>
             </div>
             <p class="detail-note accent-warn" id="aiAdvice" style="font-weight:600; margin-top:8px;"></p>
-            <p class="detail-note" id="aiNote">Xu hướng nhiệt độ 1h tới</p>
+            <div id="aiAlertFrame" hidden>
+              <div id="aiAlert" class="farm-alert"></div>
+            </div>
+          </article>
+
+          <article class="detail-card comp-detail-card detail-wide" id="aiComparisonCard">
+            <div class="ai-header-row">
+              <h3 class="detail-title">Đối chiếu AI & API (Ngày mai)</h3>
+              <div class="live-badge live-badge--mini"><span class="live-dot pulse"></span> PHÁT TRIỂN</div>
+            </div>
+            <div class="ai-compare-grid">
+              <div class="ai-compare-col">
+                <div class="ai-compare-label">Nhiệt độ Cao nhất (Max)</div>
+                <div class="ai-compare-values">
+                  <div class="ai-val-box">
+                    <span class="ai-val-label">AI Dự đoán</span>
+                    <span class="ai-val-num" id="aiMaxPred">—</span>
+                  </div>
+                  <div class="ai-val-box">
+                    <span class="ai-val-label">API Dự báo</span>
+                    <span class="ai-val-num" id="apiMaxPred">—</span>
+                  </div>
+                </div>
+                <div class="ai-error-tag" id="aiMaxError">—</div>
+              </div>
+              <div class="ai-compare-col">
+                <div class="ai-compare-label">Nhiệt độ Trung bình (Avg)</div>
+                <div class="ai-compare-values">
+                  <div class="ai-val-box">
+                    <span class="ai-val-label">AI Dự đoán</span>
+                    <span class="ai-val-num" id="aiAvgPred">—</span>
+                  </div>
+                  <div class="ai-val-box">
+                    <span class="ai-val-label">API Dự báo</span>
+                    <span class="ai-val-num" id="apiAvgPred">—</span>
+                  </div>
+                </div>
+                <div class="ai-error-tag" id="aiAvgError">—</div>
+              </div>
+            </div>
           </article>
         </div>
       </section>
@@ -562,6 +621,27 @@
           <h3 class="comp-chart-title">Biểu đồ so sánh nhiệt độ 24h</h3>
           <div class="chart-card comp-chart">
             <canvas id="comparisonChart" width="800" height="160"></canvas>
+          </div>
+        </div>
+      </section>
+      <section class="block comp-section" id="floodSection">
+        <header class="block-head comp-section__head">
+          <div class="block-title-row">
+            <h2 class="block-title comp-section__title">Ngập lụt & Triều cường</h2>
+            <div id="floodRiskBadge" class="live-badge">TÍNH TOÁN RỦI RO</div>
+          </div>
+          <p class="block-sub comp-section__sub">Cảnh báo ngập lụt kết hợp Mưa + Thủy triều + Gió</p>
+        </header>
+        <div class="flood-alert-card card" id="floodAlertCard">
+          <div class="flood-alert-main">
+            <div class="flood-info">
+              <h3 class="flood-status" id="floodStatus">Đang phân tích rủi ro...</h3>
+              <p class="flood-details" id="floodDetails">Vui lòng chờ tải dữ liệu thủy văn và khí tượng khu vực.</p>
+            </div>
+          </div>
+          <div class="flood-meta" id="floodAdvice">
+            <span class="flood-advice-tag">GỢI Ý DUY TRÌ</span>
+            <span id="floodAdviceText">Dữ liệu đang được đồng bộ hóa.</span>
           </div>
         </div>
       </section>

@@ -4,42 +4,75 @@
   const WeatherAI = {
     predictNext(temps) {
       const n = temps.length;
-      if (n < 2) return temps[0] || 0;
+      if (n < 2) return temps[n - 1] || 0;
       let xSum = 0, ySum = 0, xxSum = 0, xySum = 0;
       for (let i = 0; i < n; i++) {
         xSum += i; ySum += temps[i];
         xxSum += i * i; xySum += i * temps[i];
       }
-      const denom = n * xxSum - xSum * xSum;
-      if (denom === 0) return temps[n - 1];
+      const denom = (n * xxSum - xSum * xSum);
+      if (denom === 0) return ySum / n;
       const m = (n * xySum - xSum * ySum) / denom;
       const b = (ySum - m * xSum) / n;
       return Math.round((m * n + b) * 10) / 10;
     },
+    predictTomorrow(history) {
+      if (!history || history.length < 3) return null;
+      const maxes = history.map(h => h.hi).filter(v => v !== null);
+      const avgs = history.map(h => (h.hi + h.lo) / 2).filter(v => !isNaN(v));
+
+      if (maxes.length < 3) return null;
+
+      return {
+        max: this.predictNext(maxes),
+        avg: this.predictNext(avgs)
+      };
+    },
     getAdvice(predTemp, currentTemp, humidity, rainProb, windSpeed, uvIndex, cloudCover) {
-      let aqua = [], health = [], agri = [];
-      if (predTemp > 36 || predTemp < 18) aqua.push("Không nên thả giống hôm nay (Sốc nhiệt)");
-      else if (rainProb > 0.7) aqua.push("Hạn chế thả giống (Nguy cơ sốc nước do mưa)");
+      let aqua = [];
+      let level = 'Thấp';
+      let score = 0;
 
-      if (cloudCover > 60 && humidity > 80 && currentTemp > 30) aqua.push("Tăng sục khí Oxy (Nguy cơ hạ DO)");
-      if (Math.abs(predTemp - currentTemp) > 3) aqua.push("Sốc nhiệt: Giảm 20% thức ăn cho tôm");
-      if (rainProb > 0.6) aqua.push("Kiểm tra độ mặn & pH sau mưa");
+      if (predTemp >= 35) {
+        aqua.push("Nhiệt độ cực cao: Tôm dễ chết do sốc nhiệt");
+        score += 4;
+      } else if (predTemp >= 32) {
+        aqua.push("Nắng nóng: Tăng cường sục khí, giảm thức ăn");
+        score += 2;
+      }
 
-      if (uvIndex >= 8) health.push("UV cực cao: Tránh ra đồng từ 10h-15h");
-      else if (uvIndex >= 6) health.push("UV cao: Mặc đồ bảo hộ, mũ rộng vành");
-      else if (currentTemp > 37) health.push("Nắng nóng gay gắt: Nghỉ ngơi nơi bóng râm");
+      if (rainProb >= 0.75) {
+        aqua.push("Mưa rất lớn: Độ mặn sẽ giảm mạnh, nguy cơ sốc nước");
+        score += 3;
+      } else if (rainProb >= 0.5) {
+        aqua.push("Cảnh báo mưa: Kiểm tra độ mặn thường xuyên");
+        score += 1;
+      }
 
-      if (windSpeed < 5) agri.push("Lý tưởng bón phân / phun thuốc");
-      else if (windSpeed < 15) agri.push("Gió nhẹ: Ưu tiên bón phân");
-      else if (windSpeed < 25) agri.push("Gió mạnh: Không nên phun thuốc");
-      else agri.push("Gió rất mạnh: Dừng mọi hoạt động");
+      if (predTemp >= 34 || rainProb >= 0.7 || Math.abs(predTemp - currentTemp) > 4) {
+        aqua.push("Không nên thay nước hôm nay (Tránh gây thêm sốc)");
+        score += 2;
+      }
 
-      if (humidity > 85 && currentTemp > 24 && currentTemp < 29) agri.push("Cảnh báo bệnh đạo ôn: Thăm đồng");
-      if (rainProb > 0.5) agri.push("Trì hoãn bón phân (Tránh rửa trôi)");
-      if (humidity < 40 && predTemp > 32) agri.push("Nguy cơ cháy vườn: Rất cao");
+      if (cloudCover > 80 && humidity > 85 && currentTemp > 30) {
+        aqua.push("Nguy cơ hạ Oxy hòa tan (DO)");
+        score += 1;
+      }
+      if (windSpeed > 25) {
+        aqua.push("Gió mạnh: Chú ý sóng đánh tạt tôm vào bờ");
+        score += 1;
+      }
 
-      let all = [...aqua, ...health, ...agri];
-      return all.length ? all.join(" | ") : "Điều kiện ổn định cho sản xuất";
+      if (score >= 6) level = 'Cao';
+      else if (score >= 3) level = 'Trung bình';
+
+      const mainAdvice = aqua.length ? aqua[0] : (predTemp > 30 ? "Nắng nóng" : "Thời tiết lý tưởng");
+
+      return {
+        text: mainAdvice,
+        all: aqua,
+        level: level
+      };
     }
   };
 
@@ -96,17 +129,29 @@
     }
     saveSettings();
   }
-  const HISTORY_CACHE_KEY = 'rt_history_cache_v1';
+  const HISTORY_CACHE_KEY = 'rt_history_cache_v2';
   const $ = (id) => document.getElementById(id);
   const qs = (sel) => document.querySelector(sel);
   function weatherEmoji(code) {
-    if (code < 300) return '⛈️';
-    if (code < 600) return '🌧️';
-    if (code < 700) return '❄️';
-    if (code < 800) return '🌫️';
-    if (code === 800) return '☀️';
-    if (code <= 802) return '🌤️';
-    return '☁️';
+    if (code == null) return { icon: '☀️', desc: 'Nắng' };
+    if (code >= 1000) {
+      const wmo = code - 1000;
+      if (wmo === 0) return { icon: '☀️', desc: 'Trời quang' };
+      if (wmo <= 3) return { icon: '🌤️', desc: 'Ít mây' };
+      if (wmo <= 48) return { icon: '🌫️', desc: 'Sương mù' };
+      if (wmo <= 67) return { icon: '🌧️', desc: 'Mưa nhẹ' };
+      if (wmo <= 77) return { icon: '❄️', desc: 'Tuyết' };
+      if (wmo <= 82) return { icon: '🌦️', desc: 'Mưa rào' };
+      if (wmo <= 99) return { icon: '⛈️', desc: 'Giông sét' };
+      return { icon: '☁️', desc: 'Nhiều mây' };
+    }
+    if (code < 300) return { icon: '⛈️', desc: 'Giông sét' };
+    if (code < 600) return { icon: '🌧️', desc: 'Mưa' };
+    if (code < 700) return { icon: '❄️', desc: 'Tuyết' };
+    if (code < 800) return { icon: '🌫️', desc: 'Sương' };
+    if (code === 800) return { icon: '☀️', desc: 'Nắng' };
+    if (code <= 802) return { icon: '🌤️', desc: 'Ít mây' };
+    return { icon: '☁️', desc: 'Nhiều mây' };
   }
 
   function weatherEmojiDayNight(code, isDay) {
@@ -304,11 +349,15 @@
     return { ward, dist: bestDist, coord: best };
   }
   function setLocation(lat, lon, name) {
+    if (Math.abs(RT.lat - lat) > 0.005 || Math.abs(RT.lon - lon) > 0.005) {
+      RT.historyMeta = { ts: 0, lat: null, lon: null };
+      RT.history = [];
+    }
     RT.lat = lat;
     RT.lon = lon;
     RT.name = name;
     if (RT.leafletMap && RT._marker) {
-      RT._marker.setLatLng([lat, lon]).openPopup();
+      RT._marker.setLatLng([lat, lon]).setPopupContent(`<b>${name}</b><br>Vị trí đang xem`).openPopup();
       RT.leafletMap.panTo([lat, lon], { animate: true });
     }
     if (window.updateGPSMarker) window.updateGPSMarker(lat, lon);
@@ -561,27 +610,32 @@
       const uvIndex = RT.onecall?.current?.uvi || 0;
       const windSpeed = mps2kmh(RT.current?.wind?.speed || 0);
       const prediction = WeatherAI.predictNext(temps);
-      const advice = WeatherAI.getAdvice(prediction, currentTemp, humidity, rainProb, windSpeed, uvIndex, cloudCover);
+      const adviceObj = WeatherAI.getAdvice(prediction, currentTemp, humidity, rainProb, windSpeed, uvIndex, cloudCover);
       aiStat.textContent = RT.dispT(prediction) + (RT.unit() === 'F' ? '°F' : '°C');
       aiStatus.textContent = 'Máy học';
 
       if (adviceEl) {
-        adviceEl.textContent = advice;
+        adviceEl.textContent = adviceObj.text;
         adviceEl.style.display = 'block';
 
         if (alertEl && alertFrame) {
           alertFrame.hidden = false;
           let cls = 'is-safe';
-          if (advice.includes('Nguy cơ') || advice.includes('Không nên') || advice.includes('Dừng')) {
+          if (adviceObj.level === 'Cao') {
             cls = 'is-danger';
-          } else if (advice.includes('Cảnh báo') || advice.includes('Hạn chế') || advice.includes('Gió mạnh')) {
+          } else if (adviceObj.level === 'Trung bình') {
             cls = 'is-warn';
           }
 
           alertEl.className = `farm-alert ${cls}`;
           alertEl.innerHTML = `
             <div class="farm-alert-content">
-              <strong>Phân tích AI:</strong> ${advice}
+              <div class="danger-row">
+                <strong>Mức độ nguy hiểm:</strong>
+                <span class="danger-badge danger-badge--${adviceObj.level.toLowerCase()}">${adviceObj.level}</span>
+              </div>
+              <div class="farm-advice-main">${adviceObj.text}</div>
+              ${adviceObj.all.length > 1 ? `<div class="farm-advice-sub">${adviceObj.all.slice(1).join('<br>')}</div>` : ''}
             </div>
           `;
         }
@@ -593,6 +647,60 @@
     } catch (err) {
       console.warn('[AI] Lỗi tính toán local', err);
     }
+  }
+
+  function renderAIComparison() {
+    const aiMax = $('aiMaxPred');
+    const apiMax = $('apiMaxPred');
+    const aiAvg = $('aiAvgPred');
+    const apiAvg = $('apiAvgPred');
+    const errMax = $('aiMaxError');
+    const errAvg = $('aiAvgError');
+
+    if (!aiMax) return;
+
+    if (!RT.history?.length || !RT.forecast?.list) {
+      aiMax.textContent = '...';
+      apiMax.textContent = '...';
+      return;
+    }
+
+    const selfPred = WeatherAI.predictTomorrow(RT.history);
+    if (!selfPred) {
+      if (aiMax) aiMax.textContent = '...';
+      if (apiMax) apiMax.textContent = '...';
+      return;
+    }
+
+    const tom = new Date(); tom.setDate(tom.getDate() + 1);
+    const tomStr = tom.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' });
+
+    const tomPoints = RT.forecast.list.filter(p => {
+      const d = new Date(p.dt * 1000);
+      return d.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' }) === tomStr;
+    });
+
+    if (!tomPoints.length) return;
+    const apiMaxVal = Math.max(...tomPoints.map(p => p.main.temp));
+    const apiAvgVal = tomPoints.reduce((s, p) => s + p.main.temp, 0) / tomPoints.length;
+
+    aiMax.textContent = RT.dispT(selfPred.max) + '°';
+    apiMax.textContent = RT.dispT(apiMaxVal) + '°';
+    aiAvg.textContent = RT.dispT(selfPred.avg) + '°';
+    apiAvg.textContent = RT.dispT(apiAvgVal) + '°';
+
+    const calcErr = (self, api, el) => {
+      const diff = Math.abs(self - api);
+      const pct = (diff / api) * 100;
+      el.textContent = `Sai số: ${pct.toFixed(1)}%`;
+      el.className = 'ai-error-tag';
+      if (pct < 3) el.classList.add('ai-error--low');
+      else if (pct < 10) el.classList.add('ai-error--med');
+      else el.classList.add('ai-error--high');
+    };
+
+    calcErr(selfPred.max, apiMaxVal, errMax);
+    calcErr(selfPred.avg, apiAvgVal, errAvg);
   }
 
   function renderHero() {
@@ -645,7 +753,7 @@
     animNum($('loTemp'), RT.dispT(dayLo));
 
     const iconEl = $('mainIcon');
-    if (iconEl) { iconEl.textContent = icon; iconEl.title = desc; }
+    if (iconEl) { iconEl.textContent = icon.icon; iconEl.title = desc; }
     setTxt('mainDesc', desc);
 
     setTxt('heroCity', RT.name);
@@ -1430,7 +1538,7 @@
         if (window.FORECAST[i]) {
           window.FORECAST[i].d = i === 0 ? 'Hôm nay' : wkday[data.dt.getDay()];
           window.FORECAST[i].date = data.dt.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' });
-          window.FORECAST[i].icon = weatherEmoji(code);
+          window.FORECAST[i].icon = weatherEmoji(code).icon;
           window.FORECAST[i].desc = desc;
           window.FORECAST[i].hi = Math.round(hi);
           window.FORECAST[i].lo = Math.round(lo);
@@ -1459,7 +1567,7 @@
         : data.dt.toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' });
       return `<div class="forecast-row">
         <div class="fc-day">${label}<span class="fc-date"> — ${desc}</span></div>
-        <div class="fc-icon">${icon}</div>
+        <div class="fc-icon">${icon.icon}</div>
         <div class="fc-desc">${windKmh} km/h</div>
         <div class="fc-rain">${rain}% 💧</div>
         <div class="fc-bar-wrap">
@@ -1619,46 +1727,27 @@
           <div class="smart-alert__title">Cảnh báo UV cao ${uvi}</div>
           <div class="smart-alert__text">${uvLevel} - ${advice}</div>
         </div>
-        <button class="smart-alert__close" onclick="this.parentElement.remove(); RT.dismissedAlerts.add('${key}'); RT.uvDismissed = true;">×</button>
+        <button class="smart-alert__close" onclick="this.parentElement.remove(); RT.dismissedAlerts.add('${key}');">×</button>
       `;
       alertsCont.appendChild(banner);
-
-      setTimeout(() => {
-        if (banner.parentNode) banner.remove();
-        RT.dismissedAlerts.add(key);
-      }, 30000);
     }
-
-    showAlertPopup({
-      lvl: sunnyHours ? 'warn' : 'info',
-      title: ` UV ${uvi} - ${uvLevel}`,
-      body: advice
-    }, key);
   }
 
-  function showAlertPopup({ lvl, title, body }, key) {
-    let el = $('rt-alert-popup');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'rt-alert-popup';
-      document.body.appendChild(el);
+  async function fetchHistoryOpenMeteo(lat, lon, start, end) {
+    try {
+      const s = start.toISOString().split('T')[0];
+      const e = end.toISOString().split('T')[0];
+      const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${s}&end_date=${e}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,weather_code&hourly=relative_humidity_2m&timezone=auto`;
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d || null;
+    } catch (err) {
+      console.warn('[OpenMeteo] Lỗi lấy lịch sử:', err);
+      return null;
     }
-    el.className = `rt-alert-popup rt-alert-${lvl} rt-alert-show`;
-    el.innerHTML = `
-      <div class="rt-al-body">
-        <div class="rt-al-title">${title}</div>
-        <div class="rt-al-text">${body}</div>
-      </div>
-      <button class="rt-al-close" aria-label="Đóng">×</button>`;
-    el.querySelector('.rt-al-close').onclick = () => {
-      el.classList.remove('rt-alert-show');
-      RT.dismissedAlerts.add(key);
-    };
-    setTimeout(() => {
-      el.classList.remove('rt-alert-show');
-      RT.dismissedAlerts.add(key);
-    }, 14000);
   }
+
   async function buildHistory() {
     const cur = RT.current;
     if (!cur) return;
@@ -1669,6 +1758,7 @@
     const sameLoc = RT.historyMeta.lat != null && RT.historyMeta.lon != null
       && Math.abs(RT.historyMeta.lat - RT.lat) < 0.01
       && Math.abs(RT.historyMeta.lon - RT.lon) < 0.01;
+
     if (sameDay && sameLoc && RT.history?.length === 7) {
       renderHistory();
       return;
@@ -1682,63 +1772,61 @@
       days.push(dt);
     }
 
-    const locKey = historyLocKey(RT.lat, RT.lon);
-    const cache = loadHistoryCache();
-    const cachedDays = cache?.[locKey]?.days || {};
+    const omData = await fetchHistoryOpenMeteo(RT.lat, RT.lon, days[0], days[5]);
 
-    const results = await Promise.allSettled(days.map(d => fetchHistoryDay(d)));
-
-    RT.history = results.map((res, idx) => {
-      const dt = days[idx];
-      const dKey = dateKey(dt);
-      const cached = cachedDays[dKey] || null;
+    RT.history = days.map((dt, idx) => {
       const wk = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][dt.getDay()];
-      const lbl = idx === 6
-        ? 'Hôm nay'
-        : `${wk} ${dt.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' })}`;
+      const lbl = idx === 6 ? 'Hôm nay' : `${wk} ${dt.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' })}`;
 
-      if (res.status === 'fulfilled' && res.value) {
-        saveHistoryDay(cache, locKey, dKey, res.value);
+      if (idx === 6 && RT.forecast?.list?.length) {
+        const todayStr = new Date().toDateString();
+        const todayPoints = RT.forecast.list.filter(p => new Date(p.dt * 1000).toDateString() === todayStr);
+        const activePoints = todayPoints.length ? todayPoints : RT.forecast.list.slice(0, 8);
+        const fTemps = activePoints.map(p => p.main.temp);
+        const wInfo = weatherEmoji(cur.weather?.[0]?.id);
         return {
           label: lbl,
-          hi: res.value.hi,
-          lo: res.value.lo,
-          rain: res.value.rain,
-          humidity: res.value.humidity,
-          wind: res.value.wind,
-          icon: res.value.icon,
-          source: idx === 6 ? 'live' : 'api',
+          hi: Math.round(Math.max(...fTemps, (cur.main?.temp_max || -99))),
+          lo: Math.round(Math.min(...fTemps, (cur.main?.temp_min || 99))),
+          rain: Math.round((activePoints[0].pop || 0) * 100),
+          humidity: cur.main?.humidity,
+          wind: mps2kmh(cur.wind?.speed || 0),
+          icon: wInfo.icon,
+          desc: wInfo.desc,
+          source: 'live',
         };
       }
 
-      if (cached) {
+      const daily = omData?.daily;
+      if (daily && daily.time && daily.time[idx] != null) {
+        let meanHum = null;
+        if (omData.hourly && omData.hourly.relative_humidity_2m) {
+          const slice = omData.hourly.relative_humidity_2m.slice(idx * 24, (idx + 1) * 24);
+          if (slice.length) {
+            meanHum = Math.round(slice.reduce((a, b) => a + b, 0) / slice.length);
+          }
+        }
+        const wInfo = weatherEmoji(1000 + daily.weather_code[idx]);
         return {
           label: lbl,
-          hi: cached.hi,
-          lo: cached.lo,
-          rain: cached.rain,
-          humidity: cached.humidity,
-          wind: cached.wind,
-          icon: cached.icon,
-          source: 'cache',
+          hi: Math.round(daily.temperature_2m_max[idx]),
+          lo: Math.round(daily.temperature_2m_min[idx]),
+          rain: Math.round(daily.precipitation_sum[idx] || 0),
+          humidity: meanHum,
+          wind: Math.round(daily.wind_speed_10m_max[idx] || 0),
+          icon: wInfo.icon,
+          desc: wInfo.desc,
+          source: 'api',
         };
       }
 
-      const baseTemp = cur.main?.temp ?? 31;
       return {
-        label: lbl,
-        hi: Math.round(cur.main?.temp_max ?? baseTemp + 2),
-        lo: Math.round(cur.main?.temp_min ?? baseTemp - 3),
-        rain: null,
-        humidity: cur.main?.humidity ?? null,
-        wind: mps2kmh(cur.wind?.speed ?? 0),
-        icon: weatherEmoji(cur.weather?.[0]?.id),
-        source: 'fallback',
+        label: lbl, hi: null, lo: null, rain: null, humidity: null, wind: null,
+        icon: '❓', desc: 'Không có dữ liệu', source: 'fallback',
       };
     });
 
     RT.historyMeta = { ts: now, lat: RT.lat, lon: RT.lon };
-    persistHistoryCache(cache);
     renderHistory();
   }
 
@@ -1788,53 +1876,34 @@
       });
       localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cache || {}));
     } catch (_) { }
+
+    if (typeof renderAIComparison === 'function') renderAIComparison();
   }
 
   async function fetchHistoryDay(dateObj) {
-    const dtSec = Math.floor(dateObj.getTime() / 1000);
-    const url = new URL('https://api.openweathermap.org/data/3.0/onecall/timemachine');
+    const dStr = dateKey(dateObj);
+    const url = new URL('https://api.openweathermap.org/data/3.0/onecall/day_summary');
     url.searchParams.set('appid', OWM_KEY);
     url.searchParams.set('units', 'metric');
     url.searchParams.set('lang', 'vi');
     url.searchParams.set('lat', RT.lat);
     url.searchParams.set('lon', RT.lon);
-    url.searchParams.set('dt', dtSec);
+    url.searchParams.set('date', dStr);
 
     const r = await fetch(url.toString(), { cache: 'no-store' });
-    if (!r.ok) throw new Error(`OWM timemachine HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`OWM day_summary HTTP ${r.status}`);
     const data = await r.json();
 
-    const points = Array.isArray(data?.data) ? data.data
-      : Array.isArray(data?.hourly) ? data.hourly
-        : data?.current ? [data.current]
-          : [];
+    const hi = data.temperature?.max != null ? Math.round(data.temperature.max) : null;
+    const lo = data.temperature?.min != null ? Math.round(data.temperature.min) : null;
+    const humidity = data.humidity?.afternoon ?? null;
+    const wind = data.wind?.max?.speed != null ? Math.round(mps2kmh(data.wind.max.speed)) : null;
+    const rain = data.precipitation?.total != null ? Math.round(data.precipitation.total) : null;
 
-    if (!points.length) return null;
-
-    const temps = [];
-    const hums = [];
-    const winds = [];
-    let rainSum = 0;
-    let iconId = null;
-
-    points.forEach(p => {
-      const t = p.temp ?? p.main?.temp;
-      if (typeof t === 'number') temps.push(t);
-      const h = p.humidity ?? p.main?.humidity;
-      if (typeof h === 'number') hums.push(h);
-      const ws = p.wind_speed ?? p.wind?.speed;
-      if (typeof ws === 'number') winds.push(ws);
-      const r1 = p.rain?.['1h'] ?? p.rain?.['3h'] ?? p.rain?.value;
-      if (typeof r1 === 'number') rainSum += r1;
-      if (!iconId && p.weather?.[0]?.id) iconId = p.weather[0].id;
-    });
-
-    const hi = temps.length ? Math.round(Math.max(...temps)) : null;
-    const lo = temps.length ? Math.round(Math.min(...temps)) : null;
-    const humidity = hums.length ? Math.round(hums.reduce((a, b) => a + b, 0) / hums.length) : null;
-    const wind = winds.length ? Math.round(mps2kmh(winds.reduce((a, b) => a + b, 0) / winds.length)) : null;
-    const rain = Number.isFinite(rainSum) ? Math.round(rainSum) : null;
-    const icon = weatherEmoji(iconId ?? 800);
+    let icon = '☁️';
+    if (rain > 5) icon = '🌧️';
+    else if (rain > 0.5) icon = '🌦️';
+    else if (data.cloud_cover?.afternoon < 20) icon = '☀️';
 
     return { hi, lo, humidity, wind, rain, icon };
   }
@@ -1847,7 +1916,7 @@
     tbody.innerHTML = RT.history.map(r => `
       <tr${r.source === 'live' ? ' class="hist-live-row"' : ''}>
         <td class="hist-date">${r.label}${r.source === 'live' ? ' <span class="hist-live-tag">● Live</span>' : ''}</td>
-        <td>${r.icon}</td>
+        <td style="white-space:nowrap">${r.icon} <span style="font-size:11px; color:var(--muted)">${r.desc || ''}</span></td>
         <td class="td-hi">${r.hi == null ? '—' : `${RT.dispT(r.hi)}${su}`}</td>
         <td class="td-lo">${r.lo == null ? '—' : `${RT.dispT(r.lo)}${su}`}</td>
         <td><span class="hist-rain-pill" style="--r:${r.rain ?? 0}%">${fmtVal(r.rain, '%')}</span></td>
@@ -1882,9 +1951,32 @@
       { opacity: 0.72, maxZoom: 18 }).addTo(RT.leafletMap);
     RT._marker = L.circleMarker([RT.lat, RT.lon], {
       radius: 9, fillColor: '#3b9eff', color: '#fff',
-      weight: 2, opacity: 1, fillOpacity: 0.9,
+      weight: 2, opacity: 1, fillOpacity: 0.9, zIndexOffset: 2000
     }).addTo(RT.leafletMap)
       .bindPopup(`<b>${RT.name}</b><br>Vị trí đang xem`).openPopup();
+
+    const stations = generateHydroData();
+    stations.forEach(s => {
+      const risk = calculateFloodRisk(s);
+      const iconClass = risk.class === 'danger' ? 'station-dot--alert' : (risk.class === 'warn' ? 'station-dot--warn' : '');
+
+      const customIcon = L.divIcon({
+        className: 'station-marker',
+        html: `<div class="station-dot ${iconClass}"></div>`,
+        iconSize: [20, 20]
+      });
+
+      L.marker([s.lat, s.lon], { icon: customIcon }).addTo(RT.leafletMap)
+        .bindPopup(`
+          <div class="map-popup-card">
+            <div class="map-popup-header">${s.name}</div>
+            <div class="map-popup-row"><span class="map-popup-label">Mực nước:</span> <span class="map-popup-val">${s.waterLevel}m</span></div>
+            <div class="map-popup-row"><span class="map-popup-label">Độ mặn:</span> <span class="map-popup-val">${s.salinity}‰</span></div>
+            <div class="map-popup-row"><span class="map-popup-label">Trạng thái:</span> <span class="map-popup-val">${s.tide}</span></div>
+            <div class="map-popup-risk map-popup-risk--${risk.class}">Nguy cơ: ${risk.level}</div>
+          </div>
+        `);
+    });
 
     document.querySelectorAll('.rt-map-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1993,6 +2085,8 @@
       renderSTEMLab();
       renderDetails();
       await buildHistory();
+      renderAIComparison();
+      renderFloodAlert();
 
       if (typeof window.renderForecastHome === 'function') window.renderForecastHome();
       if (typeof window.renderChart === 'function') window.renderChart();
@@ -2081,29 +2175,6 @@
       topBar.prepend(wrap);
     }
 
-    if (!$('rt-radar-section')) {
-      const sec = document.createElement('section');
-      sec.id = 'rt-radar-section';
-      sec.className = 'block comp-section';
-      sec.innerHTML = `
-        <header class="block-head comp-section__head">
-          <h2 class="block-title comp-section__title">Radar thời tiết</h2>
-          <span class="block-sub comp-section__sub">OpenWeatherMap · Trực quan thời gian thực</span>
-        </header>
-        <div class="rt-radar-wrap">
-          <div class="rt-map-tabs">
-            <button class="rt-map-btn active" data-layer="precipitation_new"> Mưa</button>
-            <button class="rt-map-btn" data-layer="clouds_new"> Mây</button>
-            <button class="rt-map-btn" data-layer="wind_new"> Gió</button>
-            <button class="rt-map-btn" data-layer="temp_new"> Nhiệt độ</button>
-            <button class="rt-map-btn" data-layer="pressure_new"> Áp suất</button>
-          </div>
-          <div id="rt-radar-map" class="rt-radar-map"></div>
-        </div>`;
-      const sunSec = Array.from(mainFlow.querySelectorAll('.block'))
-        .find(s => s.querySelector('.sun-card'));
-      sunSec ? sunSec.before(sec) : mainFlow.appendChild(sec);
-    }
 
     if (!$('rt-history-section')) {
       const sec = document.createElement('section');
@@ -2608,7 +2679,7 @@
 
     el.innerHTML = `
       <div class="comp-hero-temp">
-        <span class="comp-hero-temp__icon">${icon}</span>
+        <span class="comp-hero-temp__icon">${icon.icon}</span>
         <span class="comp-hero-temp__val" style="color:${color}">${RT.dispT(tempC)}${su}</span>
         <p class="comp-hero-temp__desc">${desc}</p>
       </div>
@@ -2779,6 +2850,65 @@
         status: 'normal'
       },
     ];
+  }
+
+  function getNearestStationData() {
+    const stations = generateHydroData();
+    if (!stations.length) return null;
+    let nearest = null;
+    let minDist = Infinity;
+    stations.forEach(s => {
+      const d = Math.sqrt(Math.pow(s.lat - RT.lat, 2) + Math.pow(s.lon - RT.lon, 2));
+      if (d < minDist) {
+        minDist = d;
+        nearest = s;
+      }
+    });
+    return nearest;
+  }
+
+  function calculateFloodRisk(station) {
+    if (!station) return { level: 'Thấp', score: 0, class: 'ok' };
+    const rain = RT.current?.rain?.['1h'] || 0;
+    const wind = mps2kmh(RT.current?.wind?.speed || 0);
+    const water = parseFloat(station.waterLevel) || 0;
+
+    let score = 0;
+    if (water > 2.5) score += 5;
+    else if (water > 2.0) score += 3;
+    else if (water > 1.5) score += 1;
+
+    if (rain > 20) score += 4;
+    else if (rain > 10) score += 2;
+
+    if (wind > 40) score += 2;
+
+    if (score >= 7) return { level: 'Rất Cao', score, class: 'danger', icon: '', advice: 'Cảnh báo Đỏ: Nguy cơ ngập lụt diện rộng. Sẵn sàng di dời tài sản.' };
+    if (score >= 4) return { level: 'Trung bình', score, class: 'warn', icon: '', advice: 'Cảnh báo Vàng: Nguy cơ ngập cục bộ. Gia cố bờ bao và kiểm tra cống rãnh.' };
+    return { level: 'Thấp', score, class: 'ok', icon: '', advice: 'An toàn: Nguy cơ thấp. Tiếp tục theo dõi biến động thủy triều.' };
+  }
+
+  function renderFloodAlert() {
+    const card = $('floodAlertCard');
+    const statusEl = $('floodStatus');
+    const detailsEl = $('floodDetails');
+    const adviceEl = $('floodAdviceText');
+    const badge = $('floodRiskBadge');
+    if (!card || !statusEl) return;
+
+    const station = getNearestStationData();
+    const risk = calculateFloodRisk(station);
+
+    card.className = `flood-alert-card card flood-alert--${risk.class}`;
+    statusEl.innerHTML = `Nguy cơ: ${risk.level}`;
+    badge.textContent = `RỦI RO: ${risk.level.toUpperCase()}`;
+
+    const rainVal = RT.current?.rain?.['1h'] || 0;
+    detailsEl.innerHTML = `
+      Trạm gần nhất: <b>${station ? station.name : 'N/A'}</b> (${station ? station.waterLevel : '—'}m).<br>
+      Lượng mưa hiện tại: <b>${rainVal}mm/h</b>. Gió: <b>${mps2kmh(RT.current?.wind?.speed || 0)}km/h</b>.
+    `;
+    adviceEl.textContent = risk.advice;
   }
 
   function renderHydroStations() {
@@ -2965,7 +3095,7 @@
     const gpsMarkerGeo = new THREE.SphereGeometry(0.015, 8, 8);
     const gpsMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
     window.gpsMarker = new THREE.Mesh(gpsMarkerGeo, gpsMat);
-    scene.add(window.gpsMarker);
+    earth.add(window.gpsMarker);
 
     camera.position.z = 1.7;
 
@@ -3038,7 +3168,7 @@
     }
     window.addEventListener('resize', resize);
 
-    window.updateGPSMarker = (lat = 9.18, lon = 105.15) => {
+    window.updateGPSMarker = (lat = RT.lat, lon = RT.lon) => {
       const phi = (90 - lat) * Math.PI / 180;
       const theta = (lon + 180) * Math.PI / 180;
       window.gpsMarker.position.set(
