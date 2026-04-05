@@ -1,5 +1,48 @@
 (function () {
+
   'use strict';
+  const WeatherAI = {
+    predictNext(temps) {
+      const n = temps.length;
+      if (n < 2) return temps[0] || 0;
+      let xSum = 0, ySum = 0, xxSum = 0, xySum = 0;
+      for (let i = 0; i < n; i++) {
+        xSum += i; ySum += temps[i];
+        xxSum += i * i; xySum += i * temps[i];
+      }
+      const denom = n * xxSum - xSum * xSum;
+      if (denom === 0) return temps[n - 1];
+      const m = (n * xySum - xSum * ySum) / denom;
+      const b = (ySum - m * xSum) / n;
+      return Math.round((m * n + b) * 10) / 10;
+    },
+    getAdvice(predTemp, currentTemp, humidity, rainProb, windSpeed, uvIndex, cloudCover) {
+      let aqua = [], health = [], agri = [];
+      if (predTemp > 36 || predTemp < 18) aqua.push("Không nên thả giống hôm nay (Sốc nhiệt)");
+      else if (rainProb > 0.7) aqua.push("Hạn chế thả giống (Nguy cơ sốc nước do mưa)");
+
+      if (cloudCover > 60 && humidity > 80 && currentTemp > 30) aqua.push("Tăng sục khí Oxy (Nguy cơ hạ DO)");
+      if (Math.abs(predTemp - currentTemp) > 3) aqua.push("Sốc nhiệt: Giảm 20% thức ăn cho tôm");
+      if (rainProb > 0.6) aqua.push("Kiểm tra độ mặn & pH sau mưa");
+
+      if (uvIndex >= 8) health.push("UV cực cao: Tránh ra đồng từ 10h-15h");
+      else if (uvIndex >= 6) health.push("UV cao: Mặc đồ bảo hộ, mũ rộng vành");
+      else if (currentTemp > 37) health.push("Nắng nóng gay gắt: Nghỉ ngơi nơi bóng râm");
+
+      if (windSpeed < 5) agri.push("Lý tưởng bón phân / phun thuốc");
+      else if (windSpeed < 15) agri.push("Gió nhẹ: Ưu tiên bón phân");
+      else if (windSpeed < 25) agri.push("Gió mạnh: Không nên phun thuốc");
+      else agri.push("Gió rất mạnh: Dừng mọi hoạt động");
+
+      if (humidity > 85 && currentTemp > 24 && currentTemp < 29) agri.push("Cảnh báo bệnh đạo ôn: Thăm đồng");
+      if (rainProb > 0.5) agri.push("Trì hoãn bón phân (Tránh rửa trôi)");
+      if (humidity < 40 && predTemp > 32) agri.push("Nguy cơ cháy vườn: Rất cao");
+
+      let all = [...aqua, ...health, ...agri];
+      return all.length ? all.join(" | ") : "Điều kiện ổn định cho sản xuất";
+    }
+  };
+
   const OWM_KEY = '7f318ae139397881686e5acd8dce296c';
   const OWM_BASE = 'https://api.openweathermap.org/data/2.5';
   const OWM_TILE = (layer) =>
@@ -9,8 +52,12 @@
   const DEFAULT_LAT = 9.1769;
   const DEFAULT_LON = 105.1505;
   const DEFAULT_NAME = 'TP. Cà Mau';
+
+  const savedSettings = JSON.parse(localStorage.getItem('weatherSettings') || '{}');
   const RT = {
-    lat: DEFAULT_LAT, lon: DEFAULT_LON, name: DEFAULT_NAME,
+    lat: savedSettings.lat || DEFAULT_LAT,
+    lon: savedSettings.lon || DEFAULT_LON,
+    name: savedSettings.name || DEFAULT_NAME,
     current: null, forecast: null, airPollution: null, history: [],
     onecall: null,
     countdownSec: REFRESH_SEC,
@@ -18,11 +65,37 @@
     leafletMap: null, radarLayer: null, _marker: null,
     currentMapLayer: 'precipitation_new',
     dismissedAlerts: new Set(),
-    isFahrenheit: localStorage.getItem('weatherUnit') === 'F',
+    isFahrenheit: savedSettings.isFahrenheit || (localStorage.getItem('weatherUnit') === 'F'),
     unit: () => RT.isFahrenheit ? 'F' : 'C',
     dispT: (c) => RT.unit() === 'F' ? Math.round(c * 9 / 5 + 32) : Math.round(c),
     historyMeta: { ts: 0, lat: null, lon: null },
+    isPersonalized: !!savedSettings.name,
+    favorites: savedSettings.favorites || []
   };
+
+  function saveSettings() {
+    const settings = {
+      lat: RT.lat,
+      lon: RT.lon,
+      name: RT.name,
+      isFahrenheit: RT.isFahrenheit,
+      favorites: RT.favorites
+    };
+    localStorage.setItem('weatherSettings', JSON.stringify(settings));
+    RT.isPersonalized = true;
+  }
+
+  function toggleFavorite(id) {
+    const idx = RT.favorites.indexOf(id);
+    if (idx === -1) {
+      RT.favorites.push(id);
+      toast('Đã thêm vào yêu thích', 'success');
+    } else {
+      RT.favorites.splice(idx, 1);
+      toast('Đã xóa khỏi yêu thích', 'info');
+    }
+    saveSettings();
+  }
   const HISTORY_CACHE_KEY = 'rt_history_cache_v1';
   const $ = (id) => document.getElementById(id);
   const qs = (sel) => document.querySelector(sel);
@@ -64,7 +137,7 @@
   function sunEventIcon(dtSec) {
     const sys = RT.current?.sys;
     if (!sys?.sunrise || !sys?.sunset) return null;
-    const near = 45 * 60; 
+    const near = 45 * 60;
     if (Math.abs(dtSec - sys.sunrise) <= near) return '🌅';
     if (Math.abs(dtSec - sys.sunset) <= near) return '🌇';
     return null;
@@ -80,6 +153,14 @@
   function setTxt(id, val) {
     const el = $(id);
     if (el) el.textContent = val;
+  }
+
+  function debounce(fn, ms) {
+    let timeout;
+    return function (...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn.apply(this, args), ms);
+    };
   }
 
   function setupNotifications() {
@@ -98,25 +179,31 @@
   }
 
   function collectAlertStatus() {
-    const list = [
-      { id: 'roadAlert', title: 'Ra đường' },
-      { id: 'farmAlert', title: 'Nông nghiệp' },
-      { id: 'aquaAlert', title: 'Thủy sản' },
-    ];
-    const levels = { danger: 2, warn: 1 };
-    let best = null;
-    list.forEach(item => {
-      const el = $(item.id);
-      if (!el || el.hidden) return;
-      const lvl = el.dataset.level;
-      if (!levels[lvl]) return;
-      const msg = el.dataset.message || '';
-      const score = levels[lvl];
-      if (!best || score > best.score) {
-        best = { score, level: lvl, title: item.title, message: msg };
-      }
-    });
-    return best;
+    try {
+      const list = [
+        { id: 'roadAlert', title: 'Ra đường' },
+        { id: 'farmAlert', title: 'Nông nghiệp' },
+        { id: 'aquaAlert', title: 'Thủy sản' },
+        { id: 'aiAlert', title: 'AI Thông minh' },
+      ];
+      const levels = { danger: 2, warn: 1, alert: 2 };
+      let best = null;
+      list.forEach(item => {
+        const el = $(item.id);
+        if (!el || el.hidden) return;
+        const lvl = el.dataset.level;
+        if (!levels[lvl]) return;
+        const msg = el.dataset.message || el.textContent || '';
+        const score = levels[lvl];
+        if (!best || score > best.score) {
+          best = { score, level: lvl === 'alert' ? 'danger' : lvl, title: item.title, message: msg };
+        }
+      });
+      return best;
+    } catch (e) {
+      console.warn('[Alerts] Error collecting status', e);
+      return null;
+    }
   }
 
   function notifyIfNeeded() {
@@ -128,7 +215,7 @@
     const sig = `${status.level}|${status.title}|${status.message}`;
     const now = Date.now();
     let last = {};
-    try { last = JSON.parse(localStorage.getItem('rt_notify_last') || '{}'); } catch (_) {}
+    try { last = JSON.parse(localStorage.getItem('rt_notify_last') || '{}'); } catch (_) { }
     if (last.sig === sig && now - (last.ts || 0) < 30 * 60 * 1000) return;
 
     const loc = RT.name || 'Khu vực hiện tại';
@@ -139,7 +226,7 @@
     try {
       new Notification(title, { body, tag: 'rt-alert', renotify: true });
       localStorage.setItem('rt_notify_last', JSON.stringify({ sig, ts: now }));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   function toast(msg, type = 'info') {
@@ -271,8 +358,8 @@
           const distTxt = result?.dist < 50
             ? `${(result.dist * 1000).toFixed(0)}m`
             : `${result?.dist?.toFixed(1)}km`;
-          toast(`📍 ${ward?.name || 'Vị trí GPS'} · ±${Math.round(acc)}m · ${distTxt} từ trung tâm xã`, 'success');
-          
+          toast(` ${ward?.name || 'Vị trí GPS'} · ±${Math.round(acc)}m · ${distTxt} từ trung tâm xã`, 'success');
+
           await refreshAll();
           if (hourlyWrap) hourlyWrap.classList.remove('is-refreshing');
           resolve(true);
@@ -374,7 +461,7 @@
     const points = [];
     const schedule = [];
 
-    const moonAge = ( (now - new Date('2024-02-09')) / (1000*3600*24) % 29.53 );
+    const moonAge = ((now - new Date('2024-02-09')) / (1000 * 3600 * 24) % 29.53);
     const moonOffset = (moonAge / 29.53) * 2 * Math.PI;
 
     const lon = RT.lon || 105.15;
@@ -387,17 +474,17 @@
       const tidalDay = 24.84;
 
       const m2 = 0.5 * Math.sin(2 * Math.PI * (t / 12.42) - moonOffset - spatialPhase);
-      const k1 = 0.4 * Math.sin(2 * Math.PI * (t / 24.0) - moonOffset/2 - spatialPhase/2);
+      const k1 = 0.4 * Math.sin(2 * Math.PI * (t / 24.0) - moonOffset / 2 - spatialPhase / 2);
       const height = (1 - diurnalWeight) * m2 + diurnalWeight * k1 + 1.2;
 
       points.push({ x: (h / 24) * W, y: H - (height / 2.5) * H });
 
       if (h > 0 && h < 24) {
         const prevH = height;
-        const nextH = (1 - diurnalWeight) * (0.5 * Math.sin(2 * Math.PI * ((h+0.1) / 12.42) - moonOffset - spatialPhase))
-                    + diurnalWeight * (0.4 * Math.sin(2 * Math.PI * ((h+0.1) / 24.0) - moonOffset/2 - spatialPhase/2)) + 1.2;
-        const lastH = (1 - diurnalWeight) * (0.5 * Math.sin(2 * Math.PI * ((h-0.1) / 12.42) - moonOffset - spatialPhase))
-                    + diurnalWeight * (0.4 * Math.sin(2 * Math.PI * ((h-0.1) / 24.0) - moonOffset/2 - spatialPhase/2)) + 1.2;
+        const nextH = (1 - diurnalWeight) * (0.5 * Math.sin(2 * Math.PI * ((h + 0.1) / 12.42) - moonOffset - spatialPhase))
+          + diurnalWeight * (0.4 * Math.sin(2 * Math.PI * ((h + 0.1) / 24.0) - moonOffset / 2 - spatialPhase / 2)) + 1.2;
+        const lastH = (1 - diurnalWeight) * (0.5 * Math.sin(2 * Math.PI * ((h - 0.1) / 12.42) - moonOffset - spatialPhase))
+          + diurnalWeight * (0.4 * Math.sin(2 * Math.PI * ((h - 0.1) / 24.0) - moonOffset / 2 - spatialPhase / 2)) + 1.2;
 
         if ((prevH > lastH && prevH > nextH) || (prevH < lastH && prevH < nextH)) {
           const type = prevH > lastH ? 'Lớn' : 'Ròng';
@@ -442,7 +529,7 @@
           <span class="tide-legend-note">Theo trạm gần nhất: ${st?.name || '—'}</span>
         </div>
       `;
-      schedEl.innerHTML = legend + schedule.sort((a,b) => a.time - b.time).map(s => `
+      schedEl.innerHTML = legend + schedule.sort((a, b) => a.time - b.time).map(s => `
         <div class="tide-item ${s.type === 'Lớn' ? 'tide-item--up' : 'tide-item--down'}">
           <span class="tide-type">${s.type === 'Lớn' ? '▲ Triều lên' : '▼ Triều rút'}</span>
           <span class="tide-time">${s.time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -452,6 +539,61 @@
     }
   }
 
+
+  async function fetchAIPrediction() {
+    const aiStat = $('aiTempPred');
+    const aiStatus = $('aiStatusText');
+    const adviceEl = $('aiAdvice');
+    const alertEl = $('aiAlert');
+    const alertFrame = $('aiAlertFrame');
+
+    if (!aiStat || !aiStatus) return;
+
+    try {
+      const forecastPoints = getInterpolated24h();
+      if (!forecastPoints.length) return;
+
+      const temps = forecastPoints.slice(0, 4).map(p => p.temp);
+      const rainProb = forecastPoints[0]?.pop || 0;
+      const humidity = RT.current?.main?.humidity || 0;
+      const currentTemp = RT.current?.main?.temp || 0;
+      const cloudCover = RT.current?.clouds?.all || 0;
+      const uvIndex = RT.onecall?.current?.uvi || 0;
+      const windSpeed = mps2kmh(RT.current?.wind?.speed || 0);
+      const prediction = WeatherAI.predictNext(temps);
+      const advice = WeatherAI.getAdvice(prediction, currentTemp, humidity, rainProb, windSpeed, uvIndex, cloudCover);
+      aiStat.textContent = RT.dispT(prediction) + (RT.unit() === 'F' ? '°F' : '°C');
+      aiStatus.textContent = 'Máy học';
+
+      if (adviceEl) {
+        adviceEl.textContent = advice;
+        adviceEl.style.display = 'block';
+
+        if (alertEl && alertFrame) {
+          alertFrame.hidden = false;
+          let cls = 'is-safe';
+          if (advice.includes('Nguy cơ') || advice.includes('Không nên') || advice.includes('Dừng')) {
+            cls = 'is-danger';
+          } else if (advice.includes('Cảnh báo') || advice.includes('Hạn chế') || advice.includes('Gió mạnh')) {
+            cls = 'is-warn';
+          }
+
+          alertEl.className = `farm-alert ${cls}`;
+          alertEl.innerHTML = `
+            <div class="farm-alert-content">
+              <strong>Phân tích AI:</strong> ${advice}
+            </div>
+          `;
+        }
+      }
+
+      const card = $('aiForecastCard');
+      if (card) card.classList.add('ai-updated');
+
+    } catch (err) {
+      console.warn('[AI] Lỗi tính toán local', err);
+    }
+  }
 
   function renderHero() {
     renderMoon();
@@ -565,45 +707,41 @@
     root.style.setProperty('--orb-radius', (50 + (tempC - 25) * 0.9) + 'px');
     root.style.setProperty('--orb-glow', `rgba(240,160,75,${0.25 + rPct * 0.45})`);
 
-    
-    // Forecast Salinity Index integration
     const nearestSt = getNearestStationData();
     if (nearestSt && nearestSt.salinity && nearestSt.salinity !== 'N/A') {
       const salVal = parseFloat(nearestSt.salinity);
       const salStat = document.getElementById('detailSalinity');
       const salNote = document.getElementById('detailSalinityNote');
       const salBar = document.getElementById('salinityBarFill');
-      
+
       let salFcst = salVal;
-      // Adjust slightly based on 12h forecast
       const rainPoints = getInterpolated24h().slice(0, 12).reduce((sum, h) => sum + (h.pop || 0), 0);
-      const isRaining = rainPoints > 3; 
+      const isRaining = rainPoints > 3;
       if (isRaining) salFcst = Math.max(0, salVal - 0.2);
-      
+
       if (salStat) {
-          salStat.textContent = salFcst.toFixed(1) + '‰';
-          if (salFcst <= 4) {
-             salStat.className = 'detail-stat accent-ok';
-             salNote.innerHTML = isRaining ? 
-                'An toàn, có xu hướng giảm do mưa.<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Tranh thủ tích trữ nước ngọt bổ sung.</span>' : 
-                'An toàn cho nông nghiệp (≤ 4‰).<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Thích hợp tưới tiêu và lấy nước vào ao thủy sản.</span>';
-             salBar.style.backgroundColor = 'var(--ok)';
-          } else if (salFcst <= 10) {
-             salStat.className = 'detail-stat accent-warn';
-             salNote.innerHTML = 'Cảnh báo xâm nhập mặn (4-10‰).<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Hạn chế lấy nước sông. Tăng sục khí, đo mặn ao nuôi thường xuyên.</span>';
-             salBar.style.backgroundColor = 'var(--warn)';
-          } else {
-             salStat.className = 'detail-stat accent-danger';
-             salNote.innerHTML = 'Nguy hiểm: Rủi ro sinh thái cao (>10‰).<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Tuyệt đối đóng cống. Bổ sung vitamin C, khoáng chất giảm sốc cho tôm/cá.</span>';
-             salBar.style.backgroundColor = 'var(--danger)';
-          }
-          salBar.style.width = Math.min((salFcst / 15) * 100, 100) + '%';
+        salStat.textContent = salFcst.toFixed(1) + '‰';
+        if (salFcst <= 4) {
+          salStat.className = 'detail-stat accent-ok';
+          salNote.innerHTML = isRaining ?
+            'An toàn, có xu hướng giảm do mưa.<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Tranh thủ tích trữ nước ngọt bổ sung.</span>' :
+            'An toàn cho nông nghiệp (≤ 4‰).<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Thích hợp tưới tiêu và lấy nước vào ao thủy sản.</span>';
+          salBar.style.backgroundColor = 'var(--ok)';
+        } else if (salFcst <= 10) {
+          salStat.className = 'detail-stat accent-warn';
+          salNote.innerHTML = 'Cảnh báo xâm nhập mặn (4-10‰).<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Hạn chế lấy nước sông. Tăng sục khí, đo mặn ao nuôi thường xuyên.</span>';
+          salBar.style.backgroundColor = 'var(--warn)';
+        } else {
+          salStat.className = 'detail-stat accent-danger';
+          salNote.innerHTML = 'Nguy hiểm: Rủi ro sinh thái cao (>10‰).<br><span style="font-size:0.9em; opacity:0.8; display:block; margin-top:4px;">Gợi ý: Tuyệt đối đóng cống. Bổ sung vitamin C, khoáng chất giảm sốc cho tôm/cá.</span>';
+          salBar.style.backgroundColor = 'var(--danger)';
+        }
+        salBar.style.width = Math.min((salFcst / 15) * 100, 100) + '%';
       }
-    } else {
-      const salStat = document.getElementById('detailSalinity');
-      if (salStat) salStat.textContent = '--‰';
     }
 
+    fetchAIPrediction();
+    if (typeof renderSTEMLab === 'function') renderSTEMLab();
     applyDynamicBackground(d);
   }
 
@@ -680,7 +818,7 @@
       const isDay = isDayAt(item.dt);
       const sunIcon = sunEventIcon(item.dt);
       const icon = sunIcon || weatherEmojiDayNight(item.weather?.id, isDay);
-      
+
       let tCls = 'h-warm';
       if (tempC < 25) tCls = 'h-cool';
       else if (tempC >= 30) tCls = 'h-hot';
@@ -701,7 +839,7 @@
             <span>${mps2kmh(item.wind || 0)}</span>
           </div>
 
-          <div class="hour-rain">💧 ${rain}%</div>
+          <div class="hour-rain"> ${rain}%</div>
           <div class="rain-bar"><div class="rain-fill" style="width:${rain}%"></div></div>
         </div>`;
     }).join('');
@@ -726,15 +864,6 @@
     }, null)?.s || null;
   }
 
-  function isDayNow() {
-    const sys = RT.current?.sys;
-    if (sys?.sunrise && sys?.sunset) {
-      const now = Date.now() / 1000;
-      return now >= sys.sunrise && now < sys.sunset;
-    }
-    const h = new Date().getHours();
-    return h >= 6 && h < 18;
-  }
 
   function renderAquaAlert() {
     const banner = $('aquaAlert');
@@ -752,7 +881,7 @@
     const nextTemp = nextHour.temp ?? curTemp;
     const heatIndex = cur.main?.feels_like ?? curTemp;
     const nextHeatIndex = nextHour.feels_like ?? nextTemp;
-    
+
     const curWind = mps2kmh(cur.wind?.speed || 0);
     const nextWind = mps2kmh(nextHour.wind || 0);
     const curRain = cur.rain?.['1h'] || cur.rain?.['3h'] || 0;
@@ -775,23 +904,23 @@
     const warnHeat = nextHeatIndex >= 31;
 
     const details = [];
-    if (hasStorm) details.push('⚠️ Nguy hiểm: Dông sét gây sốc nước 60 phút tới');
-    if (hasHeavyRain) details.push(`⚠️ Nguy hiểm: Mưa lớn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% ≥ 10mm/70%)`);
-    if (hasWind) details.push(`⚠️ Nguy hiểm: Gió mạnh 60 phút tới (${nextWind.toFixed(1)}km/h ≥ 28km/h)`);
+    if (hasStorm) details.push(' Nguy hiểm: Dông sét gây sốc nước 60 phút tới');
+    if (hasHeavyRain) details.push(` Nguy hiểm: Mưa lớn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% ≥ 10mm/70%)`);
+    if (hasWind) details.push(` Nguy hiểm: Gió mạnh 60 phút tới (${nextWind.toFixed(1)}km/h ≥ 28km/h)`);
     if (hasHeat) {
-        const advice = isDay ? "Che mát ao nuôi, tăng sục khí oxy" : "Tăng sục khí oxy (nhiệt nước còn cao), kiểm tra oxy hòa tan";
-        details.push(`⚠️ Nguy hiểm: Nắng nóng cực đại (${nextHeatIndex.toFixed(1)}°C ≥ 35°C) — ${advice}`);
+      const advice = isDay ? "Che mát ao nuôi, tăng sục khí oxy" : "Tăng sục khí oxy (nhiệt nước còn cao), kiểm tra oxy hòa tan";
+      details.push(` Nguy hiểm: Nắng nóng cực đại (${nextHeatIndex.toFixed(1)}°C ≥ 35°C) — ${advice}`);
     }
     if (hasHighTide) {
-        const caution = isDay ? "Gia cố bờ bao, kiểm tra cống" : "Kiểm tra bờ bao bằng đèn pin, đề phòng sạt lở túi khí ban đêm";
-        details.push(`⚠️ Nguy hiểm: Mực triều (${waterLvl.toFixed(2)}m > 2.5m) — Cảnh báo ngập vùng nuôi tôm! ${caution}`);
+      const caution = isDay ? "Gia cố bờ bao, kiểm tra cống" : "Kiểm tra bờ bao bằng đèn pin, đề phòng sạt lở túi khí ban đêm";
+      details.push(` Nguy hiểm: Mực triều (${waterLvl.toFixed(2)}m > 2.5m) — Cảnh báo ngập vùng nuôi tôm! ${caution}`);
     }
 
     const warnDetails = [];
-    if (!hasHeavyRain && warnRain) warnDetails.push(`⚡ Cảnh báo: Biến động độ mặn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}%)`);
-    if (!hasWind && warnWind) warnDetails.push(`⚡ Cảnh báo: Gió khá mạnh 60 phút tới (${nextWind.toFixed(1)}km/h ≥ 22km/h)`);
-    if (!hasHeat && warnHeat) warnDetails.push(`⚡ Cảnh báo: Nhiệt tăng 60 phút tới (${nextHeatIndex.toFixed(1)}°C ≥ 31°C)`);
-    if (!hasHighTide && warnHighTide) warnDetails.push(`⚡ Cảnh báo: Mực nước cao (${waterLvl.toFixed(2)}m > 2.0m)`);
+    if (!hasHeavyRain && warnRain) warnDetails.push(` Cảnh báo: Biến động độ mặn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}%)`);
+    if (!hasWind && warnWind) warnDetails.push(` Cảnh báo: Gió khá mạnh 60 phút tới (${nextWind.toFixed(1)}km/h ≥ 22km/h)`);
+    if (!hasHeat && warnHeat) warnDetails.push(` Cảnh báo: Nhiệt tăng 60 phút tới (${nextHeatIndex.toFixed(1)}°C ≥ 31°C)`);
+    if (!hasHighTide && warnHighTide) warnDetails.push(` Cảnh báo: Mực nước cao (${waterLvl.toFixed(2)}m > 2.0m)`);
 
     const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
     const locLabel = wardInfo ? `${wardInfo.name} · ${wardInfo.district}` : (RT.name || 'Khu vực hiện tại');
@@ -851,18 +980,18 @@
     const warnRain = nextRain >= 5 || nextPop >= 50;
 
     const details = [];
-    if (hasStorm) details.push('⚠️ Nguy hiểm: Dông sét 60 phút tới (mã 2xx)');
-    if (hasHeavyRain) details.push(`⚠️ Nguy hiểm: Mưa lớn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% >= 10mm/70%)`);
-    if (hasWind) details.push(`⚠️ Nguy hiểm: Gió mạnh 60 phút tới (${nextWind.toFixed(1)} km/h >= 28 km/h)`);
+    if (hasStorm) details.push(' Nguy hiểm: Dông sét 60 phút tới (mã 2xx)');
+    if (hasHeavyRain) details.push(` Nguy hiểm: Mưa lớn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% >= 10mm/70%)`);
+    if (hasWind) details.push(` Nguy hiểm: Gió mạnh 60 phút tới (${nextWind.toFixed(1)} km/h >= 28 km/h)`);
     if (hasHeat) {
       const advice = isDay ? "Tưới nước buổi sáng sớm, che lưới cho cây trồng" : "Theo dõi nhiệt đất, chuẩn bị tưới sáng sớm mai";
-      details.push(`⚠️ Nguy hiểm: Nắng nóng cực đại (${nextHourTemp.toFixed(1)}°C >= 35°C) — ${advice}`);
+      details.push(` Nguy hiểm: Nắng nóng cực đại (${nextHourTemp.toFixed(1)}°C >= 35°C) — ${advice}`);
     }
 
     const warnDetails = [];
-    if (!hasHeavyRain && warnRain) warnDetails.push(`⚡ Cảnh báo: Mưa/xác suất cao 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% >= 5mm/50%)`);
-    if (!hasWind && warnWind) warnDetails.push(`⚡ Cảnh báo: Gió khá mạnh 60 phút tới (${nextWind.toFixed(1)} km/h >= 22 km/h)`);
-    if (!hasHeat && warnHeat) warnDetails.push(`⚡ Cảnh báo: Nhiệt tăng 60 phút tới (${nextHourTemp.toFixed(1)}°C >= 32°C)`);
+    if (!hasHeavyRain && warnRain) warnDetails.push(` Cảnh báo: Mưa/xác suất cao 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% >= 5mm/50%)`);
+    if (!hasWind && warnWind) warnDetails.push(` Cảnh báo: Gió khá mạnh 60 phút tới (${nextWind.toFixed(1)} km/h >= 22 km/h)`);
+    if (!hasHeat && warnHeat) warnDetails.push(` Cảnh báo: Nhiệt tăng 60 phút tới (${nextHourTemp.toFixed(1)}°C >= 32°C)`);
 
     const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
     const crops = getCropsForWard(wardInfo);
@@ -927,20 +1056,20 @@
     const warnVis = visibilityKm != null && visibilityKm < 4;
 
     const details = [];
-    if (hasStorm) details.push('⚠️ Nguy hiểm: Dông sét 60 phút tới, hạn chế di chuyển');
-    if (hasHeavyRain) details.push(`⚠️ Nguy hiểm: Mưa lớn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% >= 10mm/70%)`);
-    if (hasWind) details.push(`⚠️ Nguy hiểm: Gió mạnh 60 phút tới (${nextWind.toFixed(1)}km/h >= 28km/h)`);
-    if (hasHeat) details.push(`⚠️ Nguy hiểm: Nắng nóng cực đại (${nextTemp.toFixed(1)}°C >= 35°C) — ${isDay ? "Dễ mất nước, say nắng" : "Cần bù nước, nhiệt đường còn cao"}`);
+    if (hasStorm) details.push(' Nguy hiểm: Dông sét 60 phút tới, hạn chế di chuyển');
+    if (hasHeavyRain) details.push(` Nguy hiểm: Mưa lớn 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}% >= 10mm/70%)`);
+    if (hasWind) details.push(` Nguy hiểm: Gió mạnh 60 phút tới (${nextWind.toFixed(1)}km/h >= 28km/h)`);
+    if (hasHeat) details.push(` Nguy hiểm: Nắng nóng cực đại (${nextTemp.toFixed(1)}°C >= 35°C) — ${isDay ? "Dễ mất nước, say nắng" : "Cần bù nước, nhiệt đường còn cao"}`);
     if (hasLowVis) {
-        const advice = isDay ? "Bật đèn sương mù, đi chậm" : "Bật đèn chiếu sáng xa/gần, chú ý quan sát vật cản";
-        details.push(`⚠️ Nguy hiểm: Tầm nhìn thấp (${visibilityKm.toFixed(1)}km < 2km) — ${advice}`);
+      const advice = isDay ? "Bật đèn sương mù, đi chậm" : "Bật đèn chiếu sáng xa/gần, chú ý quan sát vật cản";
+      details.push(` Nguy hiểm: Tầm nhìn thấp (${visibilityKm.toFixed(1)}km < 2km) — ${advice}`);
     }
 
     const warnDetails = [];
-    if (!hasHeavyRain && warnRain) warnDetails.push(`⚡ Cảnh báo: Có mưa 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}%)`);
-    if (!hasWind && warnWind) warnDetails.push(`⚡ Cảnh báo: Gió khá mạnh 60 phút tới (${nextWind.toFixed(1)}km/h >= 22km/h)`);
-    if (!hasHeat && warnHeat) warnDetails.push(`⚡ Cảnh báo: Nhiệt cao 60 phút tới (${nextTemp.toFixed(1)}°C >= 31°C)`);
-    if (!hasLowVis && warnVis) warnDetails.push(`⚡ Cảnh báo: Tầm nhìn giảm 60 phút tới (${visibilityKm.toFixed(1)}km < 4km)`);
+    if (!hasHeavyRain && warnRain) warnDetails.push(` Cảnh báo: Có mưa 60 phút tới (${nextRain.toFixed(1)}mm/h / ${nextPop}%)`);
+    if (!hasWind && warnWind) warnDetails.push(` Cảnh báo: Gió khá mạnh 60 phút tới (${nextWind.toFixed(1)}km/h >= 22km/h)`);
+    if (!hasHeat && warnHeat) warnDetails.push(` Cảnh báo: Nhiệt cao 60 phút tới (${nextTemp.toFixed(1)}°C >= 31°C)`);
+    if (!hasLowVis && warnVis) warnDetails.push(` Cảnh báo: Tầm nhìn giảm 60 phút tới (${visibilityKm.toFixed(1)}km < 4km)`);
 
     const wardInfo = window.WARDS_COORDS ? nearestWard(RT.lat, RT.lon)?.ward : null;
     const locLabel = wardInfo ? `${wardInfo.name} · ${wardInfo.district}` : (RT.name || 'Khu vực hiện tại');
@@ -1034,7 +1163,7 @@
         advice: nxtTemp >= 35 ? 'Che nắng, tránh say nắng' : 'Bình thường'
       }
     ];
-    
+
     tbody.innerHTML = rows.map(r => `
       <tr>
         <td>${r.name}</td>
@@ -1144,7 +1273,7 @@
         current: waterLvlAqua != null ? waterLvlAqua.toFixed(2) + 'm' : '—',
         trend: `Trạm: ${nearestStAqua ? nearestStAqua.name : '—'}`,
         level: waterLvlAqua != null && waterLvlAqua > 2.5 ? 'danger' : (waterLvlAqua != null && waterLvlAqua > 2.0 ? 'warn' : 'ok'),
-        advice: waterLvlAqua != null && waterLvlAqua > 2.5 ? (isDay ? '⚠️ Gia cố bờ bao' : '⚠️ Kiểm tra bờ bao bằng đèn pin') : 'Bình thường'
+        advice: waterLvlAqua != null && waterLvlAqua > 2.5 ? (isDay ? ' Gia cố bờ bao' : ' Kiểm tra bờ bao bằng đèn pin') : 'Bình thường'
       },
       {
         name: 'Mưa lớn',
@@ -1254,7 +1383,7 @@
       ctx.fillStyle = i === 0 ? '#38bdf8' : '#fb923c';
       ctx.fill();
       ctx.restore();
-      
+
       ctx.fillStyle = 'rgba(232,234,239,0.92)';
       ctx.font = 'bold 10px DM Sans, system-ui';
       ctx.textAlign = 'center';
@@ -1390,6 +1519,11 @@
       if ($('pm25')) $('pm25').textContent = (comp.pm2_5 || 0).toFixed(1);
       if ($('pm10')) $('pm10').textContent = (comp.pm10 || 0).toFixed(1);
       if ($('o3')) $('o3').textContent = ((comp.o3 || 0) / 1000).toFixed(3);
+      if ($('no2')) $('no2').textContent = (comp.no2 || 0).toFixed(1);
+      if ($('so2')) $('so2').textContent = (comp.so2 || 0).toFixed(1);
+      if ($('co')) $('co').textContent = (comp.co || 0).toFixed(1);
+      if ($('no')) $('no').textContent = (comp.no || 0).toFixed(1);
+      if ($('nh3')) $('nh3').textContent = (comp.nh3 || 0).toFixed(1);
     }
 
     setTxt('detailRainMm', `${rainProb}%`);
@@ -1422,7 +1556,7 @@
     if (arcPath) arcPath.style.strokeDashoffset = (480 * (1 - pct)).toFixed(0);
   }
 
-function getOfficialAlertSummary() {
+  function getOfficialAlertSummary() {
     const alerts = RT.onecall?.alerts || [];
     if (!alerts.length) return null;
 
@@ -1458,7 +1592,7 @@ function getOfficialAlertSummary() {
     showAlertPopup({ lvl: summary.level, title: ` ${summary.title}`, body }, key);
   }
 
-function checkUVAlert(uvi) {
+  function checkUVAlert(uvi) {
     if (uvi < 6) return;
 
     const hr = new Date().getHours();
@@ -1511,7 +1645,6 @@ function checkUVAlert(uvi) {
     }
     el.className = `rt-alert-popup rt-alert-${lvl} rt-alert-show`;
     el.innerHTML = `
-      <div class="rt-al-icon">${lvl === 'danger' ? '' : '⚠️'}</div>
       <div class="rt-al-body">
         <div class="rt-al-title">${title}</div>
         <div class="rt-al-text">${body}</div>
@@ -1654,7 +1787,7 @@ function checkUVAlert(uvi) {
         }
       });
       localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cache || {}));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   async function fetchHistoryDay(dateObj) {
@@ -1673,8 +1806,8 @@ function checkUVAlert(uvi) {
 
     const points = Array.isArray(data?.data) ? data.data
       : Array.isArray(data?.hourly) ? data.hourly
-      : data?.current ? [data.current]
-      : [];
+        : data?.current ? [data.current]
+          : [];
 
     if (!points.length) return null;
 
@@ -1856,7 +1989,9 @@ function checkUVAlert(uvi) {
       notifyIfNeeded();
       renderDailyChart();
       renderForecast7Day();
-    renderDetails();
+      renderTrendChart();
+      renderSTEMLab();
+      renderDetails();
       await buildHistory();
 
       if (typeof window.renderForecastHome === 'function') window.renderForecastHome();
@@ -1890,7 +2025,6 @@ function checkUVAlert(uvi) {
       const coord = coords.find(c => c.id === w?.id);
       orig(w, realData);
       if (realData?.lat != null && realData?.lon != null) {
-        // Ensure GPS coordinates stay as the data source for alerts.
         setLocation(realData.lat, realData.lon, w?.name || RT.name);
       } else if (coord) {
         setLocation(coord.lat, coord.lon, w.name);
@@ -1898,8 +2032,30 @@ function checkUVAlert(uvi) {
         setLocation(w.lat, w.lon, w.name);
       }
       setTimeout(refreshAll, 200);
+      saveSettings();
     };
   }
+
+  function autoGPS() {
+    if (RT.isPersonalized) return;
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const { latitude, longitude } = pos.coords;
+      const nearest = nearestWard(latitude, longitude);
+      if (nearest && nearest.ward) {
+        setLocation(latitude, longitude, nearest.ward.name);
+        toast(` Đã tự động nhận diện: ${nearest.ward.name}`, 'success');
+        refreshAll();
+      } else {
+        setLocation(latitude, longitude, "Vị trí GPS");
+        refreshAll();
+      }
+    }, (err) => {
+      console.warn('[GPS] Người dùng từ chối hoặc lỗi:', err);
+    });
+  }
+
 
   function injectHTML() {
     const mainFlow = qs('.main-flow');
@@ -2146,6 +2302,7 @@ function checkUVAlert(uvi) {
     const input = $('searchInput');
     const results = $('searchResults');
     const tabs = $('districtTabs');
+    const gpsBtn = $('gpsActionBtn');
     if (!overlay || !searchBtn) return;
     const WARDS_DATA = [
       { id: 1, name: 'Phường 1', district: 'TP. Cà Mau', lat: 9.1769, lon: 105.1505 },
@@ -2255,23 +2412,45 @@ function checkUVAlert(uvi) {
     window.WARDS = WARDS_DATA;
     window.WARDS_COORDS = WARDS_DATA;
     const DISTRICT_ORDER = [
-      'TP. Cà Mau', 'U Minh', 'Thới Bình', 'Trần Văn Thời', 'Cái Nước', 'Đầm Dơi',
+      'fav', 'TP. Cà Mau', 'U Minh', 'Thới Bình', 'Trần Văn Thời', 'Cái Nước', 'Đầm Dơi',
       'Năm Căn', 'Phú Tân', 'Ngọc Hiển',
       'TP. Bạc Liêu', 'Hòa Bình', 'Vĩnh Lợi', 'Hồng Dân', 'Phước Long', 'TX. Giá Rai', 'Đông Hải'
     ];
     const districtRank = new Map(DISTRICT_ORDER.map((d, i) => [d, i]));
 
-    let currentFilter = 'all';
+    let currentFilter = RT.favorites.length ? 'fav' : 'all';
 
     const resetBtn = $('searchReset');
+
+    function getItemHTML(w, isFav, isSearchEmpty, idx) {
+      return `
+      <div class="sr-item" data-id="${w.id}" style="animation-delay: ${idx * 0.03}s">
+        <div class="sr-icon">📍</div>
+        <div class="sr-body">
+          <div class="sr-name">${w.name}</div>
+          <div class="sr-dist">${w.district}</div>
+        </div>
+        <div class="sr-weather">
+          <div class="sr-temp">${w.lat.toFixed(2)}°N</div>
+          <div class="sr-rain">${w.lon.toFixed(2)}°E</div>
+        </div>
+        <button type="button" class="sr-fav-btn ${isFav ? 'active' : ''}" data-id="${w.id}" title="Yêu thích">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+        </button>
+      </div>`;
+    }
 
     function renderResults(filter, query) {
       let items = WARDS_DATA;
       const isSearchEmpty = !query || query.trim() === '';
-      
+
       if (resetBtn) resetBtn.classList.toggle('visible', !isSearchEmpty);
 
-      if (filter && filter !== 'all') {
+      if (filter === 'fav') {
+        items = items.filter(w => RT.favorites.includes(w.id));
+      } else if (filter && filter !== 'all') {
         items = items.filter(w => w.district === filter);
       }
 
@@ -2283,58 +2462,55 @@ function checkUVAlert(uvi) {
 
       if (!(isSearchEmpty && filter === 'all')) {
         items = items.slice().sort((a, b) => {
-          const ra = districtRank.has(a.district) ? districtRank.get(a.district) : 999;
-          const rb = districtRank.has(b.district) ? districtRank.get(b.district) : 999;
-          if (ra !== rb) return ra - rb;
-          return a.name.localeCompare(b.name, 'vi');
+          const ra = districtRank.get(a.district) ?? 999;
+          const rb = districtRank.get(b.district) ?? 999;
+          return ra !== rb ? ra - rb : a.name.localeCompare(b.name, 'vi');
         });
       }
 
       if (!items.length) {
         results.innerHTML = `
           <div class="search-empty-state">
-            <div class="search-empty-icon">🔍</div>
             <div class="search-empty-title">Không tìm thấy địa điểm</div>
             <div class="search-empty-text">Thử tìm theo tên huyện hoặc xã khác nhé.</div>
           </div>`;
         return;
       }
 
-      results.innerHTML = generateList(items);
+      results.innerHTML = items.map((w, i) => getItemHTML(w, RT.favorites.includes(w.id), isSearchEmpty, i)).join('');
+    }
 
-      function generateList(list) {
-        return list.map((w, idx) => `
-          <div class="sr-item" data-id="${w.id}" style="animation-delay: ${idx * 0.04}s">
-            <div class="sr-icon">${isSearchEmpty ? '⭐' : '📍'}</div>
-            <div class="sr-body">
-              <div class="sr-name">${w.name}</div>
-              <div class="sr-dist">${w.district}</div>
-            </div>
-            <div class="sr-weather">
-              <div class="sr-temp">${w.lat.toFixed(2)}°N</div>
-              <div class="sr-rain">${w.lon.toFixed(2)}°E</div>
-            </div>
-          </div>`).join('');
+    results.addEventListener('click', (e) => {
+      const favBtn = e.target.closest('.sr-fav-btn');
+      if (favBtn) {
+        e.stopPropagation();
+        toggleFavorite(parseInt(favBtn.dataset.id));
+        renderResults(currentFilter, input.value);
+        return;
       }
 
-      results.querySelectorAll('.sr-item').forEach(el => {
-        el.addEventListener('click', () => {
-          const ward = WARDS_DATA.find(w => w.id === parseInt(el.dataset.id));
-          if (ward) {
-            setLocation(ward.lat, ward.lon, ward.name);
-            overlay.classList.remove('open');
-            toast(`📍 ${ward.name} · ${ward.district}`, 'success');
-            refreshAll();
-          }
-        });
-      });
-    }
+      const item = e.target.closest('.sr-item');
+      if (item) {
+        const ward = WARDS_DATA.find(w => w.id === parseInt(item.dataset.id));
+        if (ward) {
+          setLocation(ward.lat, ward.lon, ward.name);
+          overlay.classList.remove('open');
+          toast(` ${ward.name} · ${ward.district}`, 'success');
+          refreshAll();
+        }
+      }
+    });
 
     searchBtn.addEventListener('click', () => {
       overlay.classList.add('open');
       setTimeout(() => input.focus(), 100);
+      currentFilter = RT.favorites.length ? 'fav' : 'all';
+      tabs.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.d === currentFilter));
       renderResults(currentFilter, input.value);
     });
+
+    const handleSearch = debounce(() => renderResults(currentFilter, input.value), 180);
+    input.addEventListener('input', handleSearch);
 
     resetBtn?.addEventListener('click', () => {
       input.value = '';
@@ -2343,11 +2519,7 @@ function checkUVAlert(uvi) {
     });
 
     closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.classList.remove('open');
-    });
-
-    input.addEventListener('input', () => renderResults(currentFilter, input.value));
+    overlay.addEventListener('click', (e) => e.target === overlay && overlay.classList.remove('open'));
 
     tabs.addEventListener('click', (e) => {
       const btn = e.target.closest('.chip');
@@ -2894,13 +3066,47 @@ function checkUVAlert(uvi) {
 
     toggleBtn.addEventListener('click', () => {
       RT.isFahrenheit = !RT.isFahrenheit;
-      localStorage.setItem('weatherUnit', RT.unit());
       updateToggleDisplay();
+      saveSettings();
       toast(`🌡️ Chuyển sang ${RT.unit()}`, 'success');
       refreshAll();
     });
 
     updateToggleDisplay();
+  }
+
+  function initHeaderFavorite() {
+    const btn = $('headerFavBtn');
+    if (!btn) return;
+
+    function update() {
+      const currentId = findIdByCoords(RT.lat, RT.lon);
+      const isFav = currentId && RT.favorites.includes(currentId);
+      btn.classList.toggle('active', !!isFav);
+      btn.querySelector('svg').setAttribute('fill', isFav ? 'currentColor' : 'none');
+    }
+
+    function findIdByCoords(lat, lon) {
+      if (!window.WARDS) return null;
+      const w = window.WARDS.find(w => Math.abs(w.lat - lat) < 0.001 && Math.abs(w.lon - lon) < 0.001);
+      return w ? w.id : null;
+    }
+
+    btn.addEventListener('click', () => {
+      const currentId = findIdByCoords(RT.lat, RT.lon);
+      if (!currentId) return toast('Vị trí này không hỗ trợ gắn sao', 'warn');
+      toggleFavorite(currentId);
+      update();
+    });
+
+    const oldRefresh = window.refreshAll;
+    window.refreshAll = async function () {
+      const res = await oldRefresh();
+      update();
+      return res;
+    };
+
+    update();
   }
 
   function initThemeToggle() {
@@ -2915,9 +3121,146 @@ function checkUVAlert(uvi) {
     if (themeBtn) themeBtn.remove();
   }
 
+  const STEMLab = {
+    calcHeatIndex: (t, rh) => {
+      if (t < 27) return t;
+      let hi = 0.5 * (t * 1.8 + 32 + 61.0 + ((t * 1.8 + 32 - 68.0) * 1.2) + (rh * 0.094));
+      if (hi > 80) {
+        const tf = t * 1.8 + 32;
+        hi = -42.379 + 2.04901523 * tf + 10.14333127 * rh - 0.22475541 * tf * rh -
+          0.00683783 * tf * tf - 0.05481717 * rh * rh + 0.00122874 * tf * tf * rh +
+          0.00085282 * tf * rh * rh - 0.00000199 * tf * tf * rh * rh;
+      }
+      return (hi - 32) / 1.8;
+    },
+    calcWindChill: (t, v) => {
+      if (t > 10 || v < 4.8) return t;
+      return 13.12 + 0.6215 * t - 11.37 * Math.pow(v, 0.16) + 0.3965 * t * Math.pow(v, 0.16);
+    },
+    calcET0: (tMin, tMax, tAvg, lat) => {
+      const ra = 15;
+      return 0.0023 * (tAvg + 17.8) * Math.pow(tMax - tMin, 0.5) * ra;
+    },
+    calcWBGT: (t, rh, wind, uv) => {
+      const tw = t * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) +
+        Math.atan(t + rh) - Math.atan(rh - 1.676331) +
+        0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) - 4.686035;
+      const tg = t + (uv * 0.5);
+      return 0.7 * tw + 0.2 * tg + 0.1 * t;
+    }
+  };
+
+  function renderSTEMLab() {
+    const d = RT.current;
+    if (!d) return;
+    const t = d.main.temp;
+    const rh = d.main.humidity;
+    const wind = mps2kmh(d.wind.speed);
+    const uv = RT.onecall?.current?.uvi || 0;
+
+    const hi = STEMLab.calcHeatIndex(t, rh);
+    const wc = STEMLab.calcWindChill(t, wind);
+    const wbgt = STEMLab.calcWBGT(t, rh, wind, uv);
+
+    let tMin = t - 2, tMax = t + 2;
+    if (RT.forecast?.list) {
+      const todayTemps = RT.forecast.list.slice(0, 8).map(i => i.main.temp);
+      tMin = Math.min(...todayTemps);
+      tMax = Math.max(...todayTemps);
+    }
+    const et0 = STEMLab.calcET0(tMin, tMax, t, RT.lat);
+
+    setTxt('stemHI', RT.dispT(hi) + '°');
+    setTxt('stemWC', RT.dispT(wc) + '°');
+    setTxt('stemET', et0.toFixed(2) + ' mm');
+    setTxt('stemWBGT', RT.dispT(wbgt) + '°');
+  }
+
+  let trendChartInstance = null;
+  function renderTrendChart() {
+    const canvas = $('trendChart');
+    if (!canvas || !RT.forecast?.list) return;
+
+    const byDay = {};
+    RT.forecast.list.forEach(item => {
+      const date = new Date(item.dt * 1000).toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric' });
+      if (!byDay[date]) byDay[date] = { temps: [], rains: [] };
+      byDay[date].temps.push(item.main.temp);
+      byDay[date].rains.push((item.pop || 0) * 10);
+    });
+
+    const labels = Object.keys(byDay).slice(0, 7);
+    const tempData = labels.map(l => (byDay[l].temps.reduce((a, b) => a + b) / byDay[l].temps.length).toFixed(1));
+    const rainData = labels.map(l => (byDay[l].rains.reduce((a, b) => a + b) / byDay[l].rains.length).toFixed(1));
+
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    const info = $('trendChartInfo');
+    if (info) info.style.display = 'none';
+
+    trendChartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Lượng mưa (mm)',
+            data: rainData,
+            backgroundColor: 'rgba(59, 158, 255, 0.45)',
+            borderColor: 'rgba(59, 158, 255, 0.8)',
+            borderWidth: 1,
+            borderRadius: 6,
+            yAxisID: 'yRain',
+            order: 2
+          },
+          {
+            label: 'Nhiệt độ (°C)',
+            data: tempData,
+            type: 'line',
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            borderWidth: 3,
+            pointBackgroundColor: '#f59e0b',
+            tension: 0.4,
+            yAxisID: 'yTemp',
+            order: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
+          tooltip: { usePointStyle: true }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+          yRain: {
+            type: 'linear', position: 'left',
+            title: { display: true, text: 'Lượng mưa (mm)', color: '#3b9eff', font: { weight: 'bold' } },
+            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+            ticks: { color: '#3b9eff' },
+            beginAtZero: true
+          },
+          yTemp: {
+            type: 'linear', position: 'right',
+            title: { display: true, text: 'Nhiệt độ (°C)', color: '#f59e0b', font: { weight: 'bold' } },
+            grid: { display: false },
+            ticks: { color: '#f59e0b' }
+          }
+        }
+      }
+    });
+  }
+
+
 
   async function init() {
     initUnitToggle();
+
+    initHeaderFavorite();
     initThemeToggle();
     injectCSS();
     injectHTML();
