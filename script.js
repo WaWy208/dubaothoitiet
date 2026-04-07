@@ -588,7 +588,6 @@
     }
   }
 
-
   async function fetchAIPrediction() {
     const aiStat = $('aiTempPred');
     const aiStatus = $('aiStatusText');
@@ -971,7 +970,6 @@
       return !best || d < best.dist ? { s, dist: d } : best;
     }, null)?.s || null;
   }
-
 
   function renderAquaAlert() {
     const banner = $('aquaAlert');
@@ -2150,7 +2148,6 @@
     });
   }
 
-
   function injectHTML() {
     const mainFlow = qs('.main-flow');
     if (!mainFlow) return;
@@ -2174,7 +2171,6 @@
         </div>`;
       topBar.prepend(wrap);
     }
-
 
     if (!$('rt-history-section')) {
       const sec = document.createElement('section');
@@ -3384,8 +3380,6 @@
       }
     });
   }
-
-
 
   async function init() {
     initUnitToggle();

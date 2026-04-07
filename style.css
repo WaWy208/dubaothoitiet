@@ -1320,7 +1320,6 @@ html[data-sky="mist"][data-day="night"] {
   margin-bottom: 6px;
 }
 
-
 .h-cool .hour-temp {
   color: #5ec8d4;
 }
@@ -2031,7 +2030,6 @@ html[data-sky="mist"][data-day="night"] {
   align-items: center;
   gap: 10px;
 }
-
 
 .search-close-btn {
   width: 36px;
@@ -3239,7 +3237,6 @@ html[data-sky="mist"][data-day="night"] {
   color: var(--warm);
 }
 
-
 .tide-card {
   position: relative;
   border-color: rgba(245, 158, 11, 0.5);
@@ -3463,7 +3460,6 @@ html[data-sky="mist"][data-day="night"] {
   }
 }
 
-
 .author-socials {
   display: flex;
   gap: 14px;
@@ -3489,7 +3485,6 @@ html[data-sky="mist"][data-day="night"] {
   transform: translateY(-3px) scale(1.1);
 }
 
-
 .author-contact {
   margin-top: 10px;
 }
@@ -3514,7 +3509,6 @@ html[data-sky="mist"][data-day="night"] {
 .contact-link:hover {
   color: var(--accent);
 }
-
 
 .search-suggest-label {
   font-size: 11px;
@@ -3548,7 +3542,6 @@ html[data-sky="mist"][data-day="night"] {
   color: var(--muted);
   margin-top: 6px;
 }
-
 
 @media (max-width: 980px) {
   .top-bar {
@@ -3916,7 +3909,6 @@ html[data-sky="mist"][data-day="night"] {
   color: #fbbf24 !important;
   border-color: rgba(251, 191, 36, 0.3) !important;
 }
-
 
 .trend-chart-card {
   margin-bottom: 24px;
@@ -4348,4 +4340,31 @@ html[data-sky="mist"][data-day="night"] {
 
 .map-popup-risk--danger {
   background: var(--danger);
+}
+
+#floodSection .flood-alert-card.card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+html[data-day="day"] #floodSection .flood-alert-card.card {
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+#floodSection .flood-alert-main {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+}
+
+html[data-day="day"] #floodSection .flood-alert-main {
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.40);
 }
