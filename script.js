@@ -294,6 +294,22 @@
       if (p < 1) requestAnimationFrame(step);
     })(t0);
   }
+
+  function fetchJson(url, { optional = false, ...options } = {}) {
+    return fetch(url, options)
+      .then((response) => {
+        if (!response.ok) {
+          if (optional) return null;
+          throw new Error(`HTTP ${response.status} for ${url}`);
+        }
+        return response.json();
+      })
+      .catch((error) => {
+        if (optional) return null;
+        throw error;
+      });
+  }
+
   async function owmGet(path, extra = {}) {
     const url = new URL(OWM_BASE + path);
     url.searchParams.set('appid', OWM_KEY);
@@ -310,10 +326,8 @@
     const [cur, fc5, aqi, onecall] = await Promise.allSettled([
       owmGet('/weather'),
       owmGet('/forecast', { cnt: 40 }),
-      fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${RT.lat}&lon=${RT.lon}&appid=${OWM_KEY}`)
-        .then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`https://api.openweathermap.org/data/3.0/onecall?lat=${RT.lat}&lon=${RT.lon}&exclude=minutely,hourly&units=metric&lang=vi&appid=${OWM_KEY}`)
-        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetchJson(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${RT.lat}&lon=${RT.lon}&appid=${OWM_KEY}`, { optional: true }),
+      fetchJson(`https://api.openweathermap.org/data/3.0/onecall?lat=${RT.lat}&lon=${RT.lon}&exclude=minutely,hourly&units=metric&lang=vi&appid=${OWM_KEY}`, { optional: true }),
     ]);
     RT.current = cur.status === 'fulfilled' ? cur.value : null;
     RT.forecast = fc5.status === 'fulfilled' ? fc5.value : null;
@@ -365,20 +379,27 @@
     if (fc) fc.textContent = ` GPS: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
   }
 
-  function triggerGPS(isAuto = false) {
+  function setGpsButtonState(isLoading) {
     const btn = $('gpsBtn');
+    if (!btn) return;
+
+    btn.disabled = isLoading;
+    btn.innerHTML = isLoading
+      ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" style="animation:rt-spin 1s linear infinite">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span>GPS…</span>`
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
+        <path d="M2 12h20"/><path d="M12 2v20"/></svg><span>GPS</span>`;
+  }
+
+  function triggerGPS(isAuto = false) {
     if (!navigator.geolocation) {
       if (!isAuto) toast('Trình duyệt không hỗ trợ GPS', 'warn');
       return Promise.resolve(false);
     }
 
-    if (btn) {
-      btn.disabled = true;
-      const svgSpin = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="2" style="animation:rt-spin 1s linear infinite">
-        <path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
-      btn.innerHTML = `${svgSpin}<span>GPS…</span>`;
-    }
+    setGpsButtonState(true);
 
     const hourlyWrap = qs('.hourly-track-wrap');
     if (hourlyWrap) hourlyWrap.classList.add('is-refreshing');
@@ -397,12 +418,7 @@
             setLocation(la, lo, `${la.toFixed(3)}°N`);
           }
 
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
-              <path d="M2 12h20"/><path d="M12 2v20"/></svg><span>GPS</span>`;
-          }
+          setGpsButtonState(false);
 
           const distTxt = result?.dist < 50
             ? `${(result.dist * 1000).toFixed(0)}m`
@@ -415,12 +431,7 @@
         },
         (err) => {
           if (hourlyWrap) hourlyWrap.classList.remove('is-refreshing');
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
-              <path d="M2 12h20"/><path d="M12 2v20"/></svg><span>GPS</span>`;
-          }
+          setGpsButtonState(false);
           const msgs = { 1: 'GPS bị từ chối quyền truy cập', 2: 'Không tìm thấy vị trí', 3: 'GPS timeout' };
           if (!isAuto) toast(msgs[err.code] || 'Lỗi GPS', 'warn');
           resolve(false);
@@ -435,6 +446,7 @@
     if (!btn) return;
     const nb = btn.cloneNode(true);
     btn.parentNode.replaceChild(nb, btn);
+    setGpsButtonState(false);
     nb.addEventListener('click', () => triggerGPS(false));
   }
 
@@ -1746,6 +1758,40 @@
     }
   }
 
+  async function fetchStoredHistory(lat, lon, days = 7) {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lon),
+      days: String(days)
+    });
+    const result = await fetchJson(`/api/history?${params.toString()}`, { optional: true });
+    return Array.isArray(result?.items) ? result.items : [];
+  }
+
+  function formatHistoryLabel(dayKey, index, total) {
+    const date = new Date(`${dayKey}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return dayKey;
+    if (index === total - 1) return 'Hôm nay';
+
+    const weekDays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    return `${weekDays[date.getDay()]} ${date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' })}`;
+  }
+
+  function mapStoredHistory(items) {
+    if (!Array.isArray(items) || !items.length) return [];
+    return items.map((item, index) => ({
+      label: formatHistoryLabel(item.dayKey, index, items.length),
+      hi: item.hi ?? null,
+      lo: item.lo ?? null,
+      rain: item.rain ?? null,
+      humidity: item.humidity ?? null,
+      wind: item.wind ?? null,
+      icon: item.icon || '☁️',
+      desc: item.desc || 'Dữ liệu lưu trữ',
+      source: item.dayKey === dateKey(new Date()) ? 'live' : (item.source || 'db')
+    }));
+  }
+
   async function buildHistory() {
     const cur = RT.current;
     if (!cur) return;
@@ -1768,6 +1814,14 @@
       dt.setHours(12, 0, 0, 0);
       dt.setDate(dt.getDate() - i);
       days.push(dt);
+    }
+
+    const storedHistory = await fetchStoredHistory(RT.lat, RT.lon, 7);
+    if (storedHistory.length === 7) {
+      RT.history = mapStoredHistory(storedHistory);
+      RT.historyMeta = { ts: now, lat: RT.lat, lon: RT.lon };
+      renderHistory();
+      return;
     }
 
     const omData = await fetchHistoryOpenMeteo(RT.lat, RT.lon, days[0], days[5]);
@@ -2085,6 +2139,7 @@
       await buildHistory();
       renderAIComparison();
       renderFloodAlert();
+      if (typeof window.updateHeaderFavoriteState === 'function') window.updateHeaderFavoriteState();
 
       if (typeof window.renderForecastHome === 'function') window.renderForecastHome();
       if (typeof window.renderChart === 'function') window.renderChart();
@@ -2360,6 +2415,7 @@
   window.AeroCastRT = {
     refresh: refreshAll,
     setLocation: (lat, lon, name) => { setLocation(lat, lon, name); refreshAll(); },
+    syncAllLocations: (force = false) => syncAllLocationsHistory(force),
     getState: () => RT,
   };
   function initSearchOverlay() {
@@ -3225,13 +3281,7 @@
       update();
     });
 
-    const oldRefresh = window.refreshAll;
-    window.refreshAll = async function () {
-      const res = await oldRefresh();
-      update();
-      return res;
-    };
-
+    window.updateHeaderFavoriteState = update;
     update();
   }
 
@@ -3381,6 +3431,86 @@
     });
   }
 
+  function buildReportPayload(includeForecast = false) {
+    const weatherInfo = weatherEmoji(RT.current?.weather?.[0]?.id);
+    const dayPoints = RT.forecast?.list?.filter((point) => (
+      new Date(point.dt * 1000).toDateString() === new Date().toDateString()
+    )) || [];
+    const activePoints = dayPoints.length ? dayPoints : (RT.forecast?.list?.slice(0, 8) || []);
+    const temps = activePoints.map((point) => point.main?.temp).filter((value) => Number.isFinite(value));
+    const hi = temps.length ? Math.round(Math.max(...temps, RT.current?.main?.temp_max ?? -99)) : Math.round(RT.current?.main?.temp_max ?? RT.current?.main?.temp ?? 0);
+    const lo = temps.length ? Math.round(Math.min(...temps, RT.current?.main?.temp_min ?? 99)) : Math.round(RT.current?.main?.temp_min ?? RT.current?.main?.temp ?? 0);
+
+    const payload = {
+      location: RT.name || 'Unknown',
+      lat: RT.lat,
+      lon: RT.lon,
+      time: new Date().toISOString(),
+      dayKey: dateKey(new Date()),
+      current: {
+        temp: RT.current?.main?.temp,
+        humidity: RT.current?.main?.humidity,
+        desc: RT.current?.weather?.[0]?.description,
+        wind: mps2kmh(RT.current?.wind?.speed || 0)
+      },
+      history: {
+        hi,
+        lo,
+        rain: Math.round(((activePoints[0]?.pop || 0) * 100)),
+        humidity: RT.current?.main?.humidity ?? null,
+        wind: mps2kmh(RT.current?.wind?.speed || 0),
+        icon: weatherInfo.icon,
+        desc: weatherInfo.desc,
+        source: 'live'
+      }
+    };
+
+    if (includeForecast) {
+      payload.forecast_24h = getInterpolated24h().slice(0, 24).map((hour) => ({
+        time: `${new Date(hour.dt * 1000).getHours()}:00`,
+        temp: hour.temp.toFixed(1),
+        pop: Math.round((hour.pop || 0) * 100)
+      }));
+    }
+
+    return payload;
+  }
+
+  function saveWeatherReport(payload) {
+    return fetchJson('/api/save-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function syncAllLocationsHistory(force = false) {
+    const locations = Array.isArray(window.WARDS) ? window.WARDS : [];
+    if (!locations.length) return Promise.resolve(null);
+
+    const todayKey = dateKey(new Date());
+    const syncKey = `rt_locations_synced:${todayKey}`;
+    if (!force && localStorage.getItem(syncKey) === 'done') {
+      return Promise.resolve({ skipped: true });
+    }
+
+    return fetchJson('/api/sync-locations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locations, days: 7 }),
+      optional: true
+    }).then((result) => {
+      if (result?.ok) {
+        localStorage.setItem(syncKey, 'done');
+        console.log(`Synced ${result.syncedLocations}/${result.totalLocations} locations to MongoDB`);
+      }
+      return result;
+    }).catch((error) => {
+      console.warn('[MongoDB Sync] Không thể đồng bộ toàn bộ địa điểm', error);
+      return null;
+    });
+  }
+
   async function init() {
     initUnitToggle();
 
@@ -3439,36 +3569,21 @@
     if (cc) ro.observe(cc);
 
     initReportLogic();
+    syncAllLocationsHistory();
 
     console.log(' Mô phỏng dự báo thời tiết Cà Mau — sẵn sàng (Cà Mau mới + cũ). °C/°F toggle restored!');
   }
 
   function initReportLogic() {
     async function autoSaveReport() {
-      const today = new Date().toISOString().split('T')[0];
-      if (localStorage.getItem('rt_last_report_date') === today) return;
+      const today = dateKey(new Date());
+      const storageKey = `rt_last_report_date:${historyLocKey(RT.lat, RT.lon)}`;
+      if (localStorage.getItem(storageKey) === today) return;
       if (!RT.current) return;
-
-      const reportData = {
-        location: RT.name || "Unknown",
-        time: new Date().toISOString(),
-        current: {
-          temp: RT.current.main?.temp,
-          humidity: RT.current.main?.humidity,
-          desc: RT.current.weather?.[0]?.description,
-          wind: mps2kmh(RT.current.wind?.speed || 0)
-        }
-      };
       try {
-        const res = await fetch('/api/save-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(reportData)
-        });
-        if (res.ok) {
-          localStorage.setItem('rt_last_report_date', today);
-          console.log("Auto-saved daily report to Vercel Blob");
-        }
+        await saveWeatherReport(buildReportPayload());
+        localStorage.setItem(storageKey, today);
+        console.log('Auto-saved daily history snapshot to MongoDB');
       } catch (e) { console.log("Auto-save error:", e); }
     }
     setTimeout(autoSaveReport, 10000);
@@ -3480,32 +3595,11 @@
         btnSave.disabled = true;
         btnSave.textContent = "Đang lưu...";
 
-        const reportData = {
-          location: RT.name || "Unknown",
-          time: new Date().toISOString(),
-          current: {
-            temp: RT.current.main?.temp,
-            humidity: RT.current.main?.humidity,
-            desc: RT.current.weather?.[0]?.description,
-            wind: mps2kmh(RT.current.wind?.speed || 0)
-          },
-          forecast_24h: getInterpolated24h().slice(0, 24).map(h => ({
-            time: new Date(h.dt * 1000).getHours() + ":00",
-            temp: h.temp.toFixed(1),
-            pop: Math.round((h.pop || 0) * 100)
-          }))
-        };
-
         try {
-          const res = await fetch('/api/save-report', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reportData)
-          });
-          const result = await res.json();
-          if (result.url) {
-            toast("Đã lưu bản tin lên Vercel Blob!", "success");
-            console.log("Report URL:", result.url);
+          const result = await saveWeatherReport(buildReportPayload(true));
+          if (result?.ok || result?.saved || result?.reportId) {
+            toast("Đã lưu lịch sử thời tiết vào MongoDB!", "success");
+            console.log("Saved report:", result);
           }
         } catch (err) {
           toast("Lỗi khi lưu báo cáo", "warn");
