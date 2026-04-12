@@ -6,22 +6,67 @@ const { MongoClient } = require('mongodb');
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 const port = Number(process.env.PORT || 3000);
-const mongoUri = process.env.MONGODB_URI || (isProduction ? '' : 'mongodb://127.0.0.1:27017');
+const mongoUri = resolveMongoUri();
 const dbName = process.env.MONGODB_DB || 'weather_app';
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(__dirname));
 
 let clientPromise;
+let dbState = {
+  available: false,
+  checkedAt: null,
+  error: null
+};
+
+function cleanEnvValue(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+}
+
+function resolveMongoUri() {
+  const configuredUri = cleanEnvValue(
+    process.env.MONGODB_URI
+    || process.env.DATABASE_URL
+    || process.env.MONGO_URL
+    || process.env.MONGO_URI
+  );
+
+  if (configuredUri) return configuredUri;
+  return isProduction ? '' : 'mongodb://127.0.0.1:27017';
+}
 
 function assertMongoConfig() {
   if (!mongoUri) {
-    throw new Error('Missing MONGODB_URI. Set it in your environment or .env file.');
+    throw new Error('Missing MongoDB connection string. Set MONGODB_URI, DATABASE_URL, MONGO_URL, or MONGO_URI.');
   }
 
   if (!mongoUri.startsWith('mongodb://') && !mongoUri.startsWith('mongodb+srv://')) {
-    throw new Error('Invalid MONGODB_URI. It must start with mongodb:// or mongodb+srv://');
+    throw new Error('Invalid MongoDB URI. It must start with mongodb:// or mongodb+srv://');
   }
+}
+
+function updateDbState(available, error = null) {
+  dbState = {
+    available,
+    checkedAt: new Date().toISOString(),
+    error: error ? error.message : null
+  };
+}
+
+function getDbStatus() {
+  return {
+    configured: Boolean(mongoUri),
+    available: dbState.available,
+    checkedAt: dbState.checkedAt,
+    error: dbState.error
+  };
+}
+
+function handleDbFailure(error) {
+  clientPromise = null;
+  updateDbState(false, error);
+  return error;
 }
 
 function createLocationKey(lat, lon) {
@@ -121,18 +166,28 @@ async function runWithConcurrency(items, limit, worker) {
 async function getDb() {
   if (!clientPromise) {
     assertMongoConfig();
-    const client = new MongoClient(mongoUri);
-    clientPromise = client.connect();
+    const client = new MongoClient(mongoUri, {
+      serverSelectionTimeoutMS: 10000
+    });
+    clientPromise = client.connect().catch((error) => {
+      throw handleDbFailure(error);
+    });
   }
 
-  const client = await clientPromise;
+  const client = await clientPromise.catch((error) => {
+    throw handleDbFailure(error);
+  });
   const db = client.db(dbName);
 
   await Promise.all([
     db.collection('weather_history').createIndex({ locationKey: 1, dayKey: 1 }, { unique: true }),
     db.collection('weather_history').createIndex({ createdAt: -1 }),
     db.collection('weather_reports').createIndex({ createdAt: -1 })
-  ]);
+  ]).catch((error) => {
+    throw handleDbFailure(error);
+  });
+
+  updateDbState(true);
 
   return db;
 }
@@ -140,9 +195,14 @@ async function getDb() {
 app.get('/api/health', async (_req, res) => {
   try {
     await getDb();
-    res.json({ ok: true, database: dbName });
+    res.json({ ok: true, database: dbName, db: getDbStatus() });
   } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+    res.status(503).json({
+      ok: false,
+      database: dbName,
+      db: getDbStatus(),
+      error: error.message
+    });
   }
 });
 
@@ -163,9 +223,15 @@ app.get('/api/history', async (req, res) => {
       .limit(limit)
       .toArray();
 
-    return res.json({ ok: true, items: items.reverse() });
+    return res.json({ ok: true, items: items.reverse(), db: getDbStatus() });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message });
+    return res.status(200).json({
+      ok: true,
+      items: [],
+      degraded: true,
+      db: getDbStatus(),
+      error: error.message
+    });
   }
 });
 
@@ -226,10 +292,17 @@ app.post('/api/save-report', async (req, res) => {
       ok: true,
       saved: true,
       historyId: historyId ? String(historyId) : null,
-      reportId: String(reportResult.insertedId)
+      reportId: String(reportResult.insertedId),
+      db: getDbStatus()
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message });
+    return res.status(200).json({
+      ok: true,
+      saved: false,
+      degraded: true,
+      db: getDbStatus(),
+      error: error.message
+    });
   }
 });
 
@@ -290,10 +363,22 @@ app.post('/api/sync-locations', async (req, res) => {
       syncedDays,
       totalLocations: locations.length,
       failedLocations: errors.length,
-      errors: errors.slice(0, 10)
+      errors: errors.slice(0, 10),
+      db: getDbStatus()
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message });
+    return res.status(200).json({
+      ok: true,
+      skipped: true,
+      degraded: true,
+      syncedLocations: 0,
+      syncedDays: 0,
+      totalLocations: Array.isArray(req.body?.locations) ? req.body.locations.length : 0,
+      failedLocations: 0,
+      errors: [],
+      db: getDbStatus(),
+      error: error.message
+    });
   }
 });
 
@@ -301,4 +386,8 @@ app.listen(port, () => {
   console.log(`Weather server listening on http://localhost:${port}`);
   console.log(`MongoDB database: ${dbName}`);
   console.log(`MongoDB mode: ${isProduction ? 'env-only' : 'local-or-env'}`);
+  console.log(`MongoDB URI configured: ${mongoUri ? 'yes' : 'no'}`);
+  if (!mongoUri) {
+    console.warn('MongoDB is not configured. Set MONGODB_URI, DATABASE_URL, MONGO_URL, or MONGO_URI in your deploy environment.');
+  }
 });
