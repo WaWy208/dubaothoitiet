@@ -192,7 +192,7 @@ async function getDb() {
   return db;
 }
 
-app.get('/api/health', async (_req, res) => {
+async function healthHandler(_req, res) {
   try {
     await getDb();
     res.json({ ok: true, database: dbName, db: getDbStatus() });
@@ -204,9 +204,9 @@ app.get('/api/health', async (_req, res) => {
       error: error.message
     });
   }
-});
+}
 
-app.get('/api/history', async (req, res) => {
+async function historyHandler(req, res) {
   try {
     const lat = Number(req.query.lat);
     const lon = Number(req.query.lon);
@@ -233,9 +233,9 @@ app.get('/api/history', async (req, res) => {
       error: error.message
     });
   }
-});
+}
 
-app.post('/api/save-report', async (req, res) => {
+async function saveReportHandler(req, res) {
   try {
     const payload = req.body || {};
     const lat = Number(payload.lat);
@@ -304,9 +304,9 @@ app.post('/api/save-report', async (req, res) => {
       error: error.message
     });
   }
-});
+}
 
-app.post('/api/sync-locations', async (req, res) => {
+async function syncLocationsHandler(req, res) {
   try {
     const locations = Array.isArray(req.body?.locations) ? req.body.locations : [];
     const days = Math.min(Math.max(Number(req.body?.days || 7), 1), 14);
@@ -380,14 +380,34 @@ app.post('/api/sync-locations', async (req, res) => {
       error: error.message
     });
   }
-});
+}
 
-app.listen(port, () => {
-  console.log(`Weather server listening on http://localhost:${port}`);
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
+
+app.get('/api/history', historyHandler);
+app.get('/history', historyHandler);
+
+app.post('/api/save-report', saveReportHandler);
+app.post('/save-report', saveReportHandler);
+
+app.post('/api/sync-locations', syncLocationsHandler);
+app.post('/sync-locations', syncLocationsHandler);
+
+function logStartup() {
   console.log(`MongoDB database: ${dbName}`);
   console.log(`MongoDB mode: ${isProduction ? 'env-only' : 'local-or-env'}`);
   console.log(`MongoDB URI configured: ${mongoUri ? 'yes' : 'no'}`);
   if (!mongoUri) {
     console.warn('MongoDB is not configured. Set MONGODB_URI, DATABASE_URL, MONGO_URL, or MONGO_URI in your deploy environment.');
   }
-});
+}
+
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Weather server listening on http://localhost:${port}`);
+    logStartup();
+  });
+}
+
+module.exports = app;
