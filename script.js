@@ -295,12 +295,47 @@
     })(t0);
   }
 
+  function cleanBaseUrl(value) {
+    if (!value || typeof value !== 'string') return '';
+    return value.trim().replace(/\/+$/, '');
+  }
+
+  function getApiBaseUrl() {
+    try {
+      const fromQuery = new URLSearchParams(location.search).get('api');
+      if (fromQuery) return cleanBaseUrl(fromQuery);
+    } catch (_) { }
+
+    try {
+      const fromWindow = window.WEATHER_API_BASE_URL || window.API_BASE_URL;
+      if (fromWindow) return cleanBaseUrl(fromWindow);
+    } catch (_) { }
+
+    try {
+      const fromStorage = localStorage.getItem('WEATHER_API_BASE_URL');
+      if (fromStorage) return cleanBaseUrl(fromStorage);
+    } catch (_) { }
+
+    return '';
+  }
+
+  function resolveApiUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (/^https?:\/\//i.test(url)) return url;
+    if (!url.startsWith('/')) return url;
+
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return url;
+    return `${apiBase}${url}`;
+  }
+
   function fetchJson(url, { optional = false, ...options } = {}) {
-    return fetch(url, options)
+    const resolvedUrl = resolveApiUrl(url);
+    return fetch(resolvedUrl, options)
       .then((response) => {
         if (!response.ok) {
           if (optional) return null;
-          throw new Error(`HTTP ${response.status} for ${url}`);
+          throw new Error(`HTTP ${response.status} for ${resolvedUrl}`);
         }
         return response.json();
       })
@@ -1048,7 +1083,7 @@
       banner.hidden = false;
       banner.dataset.level = 'danger';
       banner.innerHTML =
-        `<strong>Thủy sản (60 phút tới - Nguy hiểm)</strong>: Rủi ro cao tại vị trí GPS.` +
+        `<strong>Thủy sản (60 phút tới - Nguy hiểm)</strong>: Rủi ro cao.` +
         `<div class="farm-detail">` + details.map(d => `• ${d}`).join('<br>') + `</div>` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel}${nearestSt ? ' (Trạm: ' + nearestSt.name + ')' : ''}</span>`;
     } else if (warnDetails.length) {
@@ -1056,7 +1091,7 @@
       banner.hidden = false;
       banner.dataset.level = 'warn';
       banner.innerHTML =
-        `<strong>Thủy sản (60 phút tới - Cảnh báo)</strong>: Theo dõi tại vị trí GPS.` +
+        `<strong>Thủy sản (60 phút tới - Cảnh báo)</strong>: Theo dõi.` +
         `<div class="farm-detail">` + warnDetails.map(d => `• ${d}`).join('<br>') + `</div>` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel}</span>`;
     } else {
@@ -1064,7 +1099,7 @@
       banner.hidden = false;
       banner.dataset.level = 'ok';
       banner.innerHTML =
-        `<strong>Thủy sản ổn định (60 phút tới)</strong>: Không có rủi ro tại GPS.` +
+        `<strong>Thủy sản ổn định (60 phút tới)</strong>: Không có rủi ro.` +
         `<span class="farm-meta">Vị trí: ${locLabel} (GPS) · Nguồn: OpenWeatherMap</span>`;
     }
   }
@@ -1120,7 +1155,7 @@
       banner.hidden = false;
       banner.dataset.level = 'danger';
       banner.innerHTML =
-        `<strong>Cảnh báo Nông nghiệp (60 phút tới)</strong>: Nguy hiểm tại vị trí GPS.` +
+        `<strong>Cảnh báo Nông nghiệp (60 phút tới)</strong>: Nguy hiểm.` +
         `<div class="farm-detail">` + details.map(d => `• ${d}`).join('<br>') + `</div>` +
         `${crops.length ? ` Cây trồng chính: ${crops.join(', ')}.` : ''}` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel} · Cây trồng: ${crops.join(', ') || 'Đang cập nhật'}</span>`;
@@ -1129,7 +1164,7 @@
       banner.hidden = false;
       banner.dataset.level = 'warn';
       banner.innerHTML =
-        `<strong>Cảnh báo Nông nghiệp (60 phút tới)</strong>: Theo dõi tại vị trí GPS.` +
+        `<strong>Cảnh báo Nông nghiệp (60 phút tới)</strong>: Theo dõi.` +
         `<div class="farm-detail">` + warnDetails.map(d => `• ${d}`).join('<br>') + `</div>` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel}</span>`;
     } else {
@@ -1137,7 +1172,7 @@
       banner.hidden = false;
       banner.dataset.level = 'ok';
       banner.innerHTML =
-        `<strong>Nông nghiệp ổn định (60 phút tới)</strong>: Thuận lợi tại vị trí GPS.` +
+        `<strong>Nông nghiệp ổn định (60 phút tới)</strong>: Thuận lợi.` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel} · Cây trồng: ${crops.join(', ') || 'Đang cập nhật'}</span>`;
     }
   }
@@ -1197,7 +1232,7 @@
       banner.hidden = false;
       banner.dataset.level = 'danger';
       banner.innerHTML =
-        `<strong>Giao thông (60 phút tới - Nguy hiểm)</strong>: Điều kiện không an toàn tại GPS.` +
+        `<strong>Giao thông (60 phút tới - Nguy hiểm)</strong>: Điều kiện không an toàn.` +
         `<div class="farm-detail">` + details.map(d => `• ${d}`).join('<br>') + `</div>` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel}</span>`;
     } else if (warnDetails.length) {
@@ -1205,7 +1240,7 @@
       banner.hidden = false;
       banner.dataset.level = 'warn';
       banner.innerHTML =
-        `<strong>Giao thông (60 phút tới - Cảnh báo)</strong>: Chú ý quan sát tại GPS.` +
+        `<strong>Giao thông (60 phút tới - Cảnh báo)</strong>: Chú ý quan sát.` +
         `<div class="farm-detail">` + warnDetails.map(d => `• ${d}`).join('<br>') + `</div>` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel}</span>`;
     } else {
@@ -1213,7 +1248,7 @@
       banner.hidden = false;
       banner.dataset.level = 'ok';
       banner.innerHTML =
-        `<strong>Giao thông ổn định (60 phút tới)</strong>: Thuận lợi tại GPS.` +
+        `<strong>Giao thông ổn định (60 phút tới)</strong>: Thuận lợi.` +
         `<span class="farm-meta">Vị trí GPS: ${locLabel}</span>`;
     }
   }
@@ -2403,6 +2438,8 @@
 .toast-rt-warn    { border-color:rgba(240,160,75,.3); }
 .toast-rt-error   { border-color:rgba(248,113,113,.3); }
 
+#btnSaveReport { display:none !important; }
+
 @media(max-width:560px){
   .rt-radar-map  { height:260px; }
   .rt-map-btn    { padding:8px 10px; font-size:11px; }
@@ -2415,7 +2452,6 @@
   window.AeroCastRT = {
     refresh: refreshAll,
     setLocation: (lat, lon, name) => { setLocation(lat, lon, name); refreshAll(); },
-    syncAllLocations: (force = false) => syncAllLocationsHistory(force),
     getState: () => RT,
   };
   function initSearchOverlay() {
@@ -3431,84 +3467,9 @@
     });
   }
 
-  function buildReportPayload(includeForecast = false) {
-    const weatherInfo = weatherEmoji(RT.current?.weather?.[0]?.id);
-    const dayPoints = RT.forecast?.list?.filter((point) => (
-      new Date(point.dt * 1000).toDateString() === new Date().toDateString()
-    )) || [];
-    const activePoints = dayPoints.length ? dayPoints : (RT.forecast?.list?.slice(0, 8) || []);
-    const temps = activePoints.map((point) => point.main?.temp).filter((value) => Number.isFinite(value));
-    const hi = temps.length ? Math.round(Math.max(...temps, RT.current?.main?.temp_max ?? -99)) : Math.round(RT.current?.main?.temp_max ?? RT.current?.main?.temp ?? 0);
-    const lo = temps.length ? Math.round(Math.min(...temps, RT.current?.main?.temp_min ?? 99)) : Math.round(RT.current?.main?.temp_min ?? RT.current?.main?.temp ?? 0);
-
-    const payload = {
-      location: RT.name || 'Unknown',
-      lat: RT.lat,
-      lon: RT.lon,
-      time: new Date().toISOString(),
-      dayKey: dateKey(new Date()),
-      current: {
-        temp: RT.current?.main?.temp,
-        humidity: RT.current?.main?.humidity,
-        desc: RT.current?.weather?.[0]?.description,
-        wind: mps2kmh(RT.current?.wind?.speed || 0)
-      },
-      history: {
-        hi,
-        lo,
-        rain: Math.round(((activePoints[0]?.pop || 0) * 100)),
-        humidity: RT.current?.main?.humidity ?? null,
-        wind: mps2kmh(RT.current?.wind?.speed || 0),
-        icon: weatherInfo.icon,
-        desc: weatherInfo.desc,
-        source: 'live'
-      }
-    };
-
-    if (includeForecast) {
-      payload.forecast_24h = getInterpolated24h().slice(0, 24).map((hour) => ({
-        time: `${new Date(hour.dt * 1000).getHours()}:00`,
-        temp: hour.temp.toFixed(1),
-        pop: Math.round((hour.pop || 0) * 100)
-      }));
-    }
-
-    return payload;
-  }
-
-  function saveWeatherReport(payload) {
-    return fetchJson('/api/save-report', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-  }
-
-  function syncAllLocationsHistory(force = false) {
-    const locations = Array.isArray(window.WARDS) ? window.WARDS : [];
-    if (!locations.length) return Promise.resolve(null);
-
-    const todayKey = dateKey(new Date());
-    const syncKey = `rt_locations_synced:${todayKey}`;
-    if (!force && localStorage.getItem(syncKey) === 'done') {
-      return Promise.resolve({ skipped: true });
-    }
-
-    return fetchJson('/api/sync-locations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locations, days: 7 }),
-      optional: true
-    }).then((result) => {
-      if (result?.ok) {
-        localStorage.setItem(syncKey, 'done');
-        console.log(`Synced ${result.syncedLocations}/${result.totalLocations} locations to MongoDB`);
-      }
-      return result;
-    }).catch((error) => {
-      console.warn('[MongoDB Sync] Không thể đồng bộ toàn bộ địa điểm', error);
-      return null;
-    });
+  function removeReportUI() {
+    const btnSave = document.getElementById('btnSaveReport');
+    if (btnSave) btnSave.remove();
   }
 
   async function init() {
@@ -3518,6 +3479,7 @@
     initThemeToggle();
     injectCSS();
     injectHTML();
+    removeReportUI();
     setupNotifications();
     await loadCropsData();
     patchSelectWard();
@@ -3568,47 +3530,7 @@
     const cc = $('comparisonChart');
     if (cc) ro.observe(cc);
 
-    initReportLogic();
-    syncAllLocationsHistory();
-
     console.log(' Mô phỏng dự báo thời tiết Cà Mau — sẵn sàng (Cà Mau mới + cũ). °C/°F toggle restored!');
-  }
-
-  function initReportLogic() {
-    async function autoSaveReport() {
-      const today = dateKey(new Date());
-      const storageKey = `rt_last_report_date:${historyLocKey(RT.lat, RT.lon)}`;
-      if (localStorage.getItem(storageKey) === today) return;
-      if (!RT.current) return;
-      try {
-        await saveWeatherReport(buildReportPayload());
-        localStorage.setItem(storageKey, today);
-        console.log('Auto-saved daily history snapshot to MongoDB');
-      } catch (e) { console.log("Auto-save error:", e); }
-    }
-    setTimeout(autoSaveReport, 10000);
-
-    const btnSave = document.getElementById('btnSaveReport');
-    if (btnSave) {
-      btnSave.addEventListener('click', async () => {
-        if (!RT.current) return;
-        btnSave.disabled = true;
-        btnSave.textContent = "Đang lưu...";
-
-        try {
-          const result = await saveWeatherReport(buildReportPayload(true));
-          if (result?.ok || result?.saved || result?.reportId) {
-            toast("Đã lưu lịch sử thời tiết vào MongoDB!", "success");
-            console.log("Saved report:", result);
-          }
-        } catch (err) {
-          toast("Lỗi khi lưu báo cáo", "warn");
-        } finally {
-          btnSave.disabled = false;
-          btnSave.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px; vertical-align:middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Lưu bản tin hôm nay`;
-        }
-      });
-    }
   }
 
   if (document.readyState === 'loading') {
