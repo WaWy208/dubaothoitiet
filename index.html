@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dự báo thời tiết — Cà Mau & Bạc Liêu</title>
+  <title>AeroCast RT — Thời tiết & Thủy văn ĐBSCL</title>
   <meta name="description"
     content="Dự báo thời tiết chi tiết, chính xác cho Cà Mau và Bạc Liêu. Dữ liệu thời gian thực từ GPS và OpenWeatherMap.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,8 +13,10 @@
     href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Outfit:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -23,7 +25,10 @@
     <div class="search-panel">
       <header class="search-header">
         <div class="search-header-top">
-          <h2 class="search-title" id="searchTitle">Chọn xã / phường</h2>
+          <div class="search-header-copy">
+            <h2 class="search-title" id="searchTitle">Chọn xã / phường</h2>
+            <p class="search-subtitle">Tìm nhanh theo tên địa phương hoặc lọc theo tỉnh.</p>
+          </div>
           <div class="search-actions">
             <button class="search-close-btn" id="searchClose" aria-label="Đóng tìm kiếm">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -41,7 +46,7 @@
           <circle cx="11" cy="11" r="8" />
           <path d="m21 21-4.3-4.3" />
         </svg>
-        <input type="search" id="searchInput" placeholder="Huyện, thành phố, thị trấn…" autocomplete="off" />
+        <input type="search" id="searchInput" placeholder="Nhập tên xã, phường, thị trấn..." autocomplete="off" />
         <button type="button" class="search-clear-btn" id="searchReset" aria-label="Xóa tìm kiếm">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3"
             stroke-linecap="round" stroke-linejoin="round">
@@ -52,7 +57,6 @@
       </div>
       <div class="district-tabs" id="districtTabs">
         <button type="button" class="chip" data-d="fav"> Yêu thích</button>
-        <button type="button" class="chip active" data-d="all">Tất cả</button>
         <button type="button" class="chip" data-d="Cần Thơ">Cần Thơ</button>
         <button type="button" class="chip" data-d="Tiền Giang">Tiền Giang</button>
         <button type="button" class="chip" data-d="Bến Tre">Bến Tre</button>
@@ -66,6 +70,9 @@
         <button type="button" class="chip" data-d="Bạc Liêu">Bạc Liêu</button>
         <button type="button" class="chip" data-d="Cà Mau">Cà Mau</button>
 
+      </div>
+      <div class="search-help">
+        <span>Chạm vào địa điểm để xem chi tiết và chọn nhanh.</span>
       </div>
       <div class="search-results" id="searchResults"></div>
     </div>

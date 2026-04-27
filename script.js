@@ -103,8 +103,11 @@
     dispT: (c) => RT.unit() === 'F' ? Math.round(c * 9 / 5 + 32) : Math.round(c),
     historyMeta: { ts: 0, lat: null, lon: null },
     isPersonalized: !!savedSettings.name,
-    favorites: savedSettings.favorites || []
+    favorites: savedSettings.favorites || [],
+    soilData: null,
+    nearestHydro: null
   };
+
 
   function saveSettings() {
     const settings = {
@@ -163,6 +166,10 @@
     if (code <= 802) return isDay ? '🌤️' : '🌥️';
     return '☁️';
   }
+
+
+
+
 
   function isDayAt(dtSec) {
     const h = new Date(dtSec * 1000).getHours();
@@ -358,17 +365,35 @@
     return r.json();
   }
   async function fetchAll() {
-    const [cur, fc5, aqi, onecall] = await Promise.allSettled([
+    const [cur, fc5, aqi, onecall, soil] = await Promise.allSettled([
       owmGet('/weather'),
       owmGet('/forecast', { cnt: 40 }),
       fetchJson(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${RT.lat}&lon=${RT.lon}&appid=${OWM_KEY}`, { optional: true }),
       fetchJson(`https://api.openweathermap.org/data/3.0/onecall?lat=${RT.lat}&lon=${RT.lon}&exclude=minutely,hourly&units=metric&lang=vi&appid=${OWM_KEY}`, { optional: true }),
+      fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${RT.lat}&longitude=${RT.lon}&current=soil_temperature_0cm,soil_moisture_0_to_1cm`, { optional: true })
     ]);
     RT.current = cur.status === 'fulfilled' ? cur.value : null;
     RT.forecast = fc5.status === 'fulfilled' ? fc5.value : null;
     RT.airPollution = aqi.status === 'fulfilled' ? aqi.value : null;
     RT.onecall = onecall.status === 'fulfilled' ? onecall.value : null;
+    RT.soilData = (soil.status === 'fulfilled' && soil.value?.current) ? soil.value.current : null;
+
+    // Sync hydro data
+    await refreshHydroStations();
+    updateNearestHydro();
   }
+
+  function updateNearestHydro() {
+    if (!hydroStationsCache.length) return;
+    let minD = Infinity;
+    let nearest = null;
+    hydroStationsCache.forEach(s => {
+      const d = Math.sqrt(Math.pow(s.lat - RT.lat, 2) + Math.pow(s.lon - RT.lon, 2));
+      if (d < minD) { minD = d; nearest = s; }
+    });
+    RT.nearestHydro = nearest;
+  }
+
 
   async function loadCropsData() {
     try {
@@ -1349,6 +1374,9 @@
     const nxtPop = Math.round((nxt.pop || 0) * 100);
     const nxtHasStorm = (nxt.weather?.id || 0) >= 200 && (nxt.weather?.id || 0) < 300;
 
+    const soilTemp = RT.soilData ? RT.soilData.soil_temperature_0cm : (curTemp != null ? (curTemp - 1.5) : 28);
+    const soilMoisture = RT.soilData ? (RT.soilData.soil_moisture_0_to_1cm * 100) : 45;
+
     const rows = [
       {
         name: 'Nắng nóng',
@@ -1375,6 +1403,22 @@
         advice: nxtWind >= 28 ? 'Gia cố giàn, cọc' : 'Bình thường'
       },
       {
+        name: 'Nhiệt độ đất',
+        threshold: '25-32°C',
+        current: `${soilTemp.toFixed(1)}°C`,
+        trend: RT.soilData ? 'Thực tế (Open-Meteo)' : 'Ước tính từ khí xác',
+        level: (soilTemp > 35 || soilTemp < 20) ? 'danger' : (soilTemp > 32 || soilTemp < 22 ? 'warn' : 'ok'),
+        advice: soilTemp > 32 ? 'Tưới đẫm giữ ẩm cho đất' : 'Bình thường'
+      },
+      {
+        name: 'Độ ẩm đất',
+        threshold: '60-80%',
+        current: `${soilMoisture.toFixed(1)}%`,
+        trend: RT.soilData ? 'Thực tế (Open-Meteo)' : 'Ước tính',
+        level: soilMoisture < 40 ? 'danger' : (soilMoisture < 60 ? 'warn' : 'ok'),
+        advice: soilMoisture < 60 ? 'Cần bổ sung nước tưới' : 'Bình thường'
+      },
+      {
         name: 'Dông sét',
         threshold: 'Mã 2xx',
         current: nxtHasStorm ? 'Có dông' : 'Không',
@@ -1383,6 +1427,7 @@
         advice: nxtHasStorm ? 'Tránh phun xịt/ra đồng' : 'Bình thường'
       }
     ];
+
 
     tbody.innerHTML = rows.map(r => `
       <tr>
@@ -1414,10 +1459,10 @@
     const nxtTemp = nxt.temp ?? curTemp;
     const nxtWind = mps2kmh(nxt.wind || (cur.wind?.speed ?? 0));
     const nxtPop = Math.round((nxt.pop || 0) * 100);
-    const nxtHasStorm = (nxt.weather?.id || 0) >= 200 && (nxt.weather?.id || 0) < 300;
 
-    const nearestStAqua = getNearestStationData();
+    const nearestStAqua = RT.nearestHydro || getNearestStationData();
     const waterLvlAqua = nearestStAqua ? parseFloat(nearestStAqua.waterLevel) : null;
+    const salinityAqua = nearestStAqua ? parseFloat(nearestStAqua.salinity) : null;
 
     const rows = [
       {
@@ -1429,6 +1474,14 @@
         advice: waterLvlAqua != null && waterLvlAqua > 2.5 ? (isDay ? ' Gia cố bờ bao' : ' Kiểm tra bờ bao bằng đèn pin') : 'Bình thường'
       },
       {
+        name: 'Độ mặn',
+        threshold: '>4‰',
+        current: Number.isFinite(salinityAqua) ? salinityAqua.toFixed(1) + '‰' : '—',
+        trend: `Trạm: ${nearestStAqua ? nearestStAqua.name : '—'}`,
+        level: (salinityAqua != null && salinityAqua > 4) ? 'danger' : (salinityAqua != null && salinityAqua > 2 ? 'warn' : 'ok'),
+        advice: salinityAqua > 4 ? 'Đóng cống, hạn chế lấy nước' : 'Bình thường'
+      },
+      {
         name: 'Mưa lớn',
         threshold: '≥10mm/h hoặc ≥70%',
         current: `${curRain.toFixed(1)} mm/h · ${curPop}%`,
@@ -1436,6 +1489,7 @@
         level: (curRain >= 10 || nxtPop >= 70) ? 'danger' : (nxtPop >= 50 ? 'warn' : 'ok'),
         advice: (curRain >= 10 || nxtPop >= 70) ? 'Chống sốc nước/độ mặn' : 'Bình thường'
       },
+
       {
         name: 'Gió mạnh',
         threshold: '≥28 km/h',
@@ -2155,6 +2209,7 @@
 
     try {
       await fetchAll();
+      await refreshHydroStations();
 
       renderHero();
       renderHourly();
@@ -2171,6 +2226,7 @@
       renderTrendChart();
       renderSTEMLab();
       renderDetails();
+      renderHydroStations();
       await buildHistory();
       renderAIComparison();
       renderFloodAlert();
@@ -2575,8 +2631,6 @@
       { id: 1007, name: 'Toàn tỉnh An Giang', district: 'An Giang', lat: 10.3759, lon: 105.4269 },
       { id: 1008, name: 'Toàn tỉnh Sóc Trăng', district: 'Sóc Trăng', lat: 9.6015, lon: 105.9760 },
       { id: 1009, name: 'Toàn tỉnh Kiên Giang', district: 'Kiên Giang', lat: 10.0125, lon: 105.0809 },
-      { id: 1010, name: 'Toàn tỉnh Bạc Liêu', district: 'Bạc Liêu', lat: 9.2941, lon: 105.7278 },
-      { id: 1011, name: 'Toàn tỉnh Cà Mau', district: 'Cà Mau', lat: 9.1769, lon: 105.1505 },
       { id: 1012, name: 'Toàn TP. Cần Thơ', district: 'Cần Thơ', lat: 10.0452, lon: 105.7469 },
 
       { id: 2001, name: 'Q. Ninh Kiều', district: 'Cần Thơ', lat: 10.0333, lon: 105.7833 },
@@ -2687,28 +2741,180 @@
       { id: 2914, name: 'H. U Minh Thượng', district: 'Kiên Giang', lat: 9.6500, lon: 105.1000 }
     ];
 
-    window.WARDS = WARDS_DATA;
-    window.WARDS_COORDS = WARDS_DATA;
+    const provinceById = (id) => {
+      const n = Number(id) || 0;
+      if ((n >= 1 && n <= 32) || n === 1011) return 'Cà Mau';
+      if ((n >= 33 && n <= 87) || n === 1010) return 'Bạc Liêu';
+      if ((n >= 2001 && n <= 2099) || n === 1012) return 'Cần Thơ';
+      if ((n >= 2101 && n <= 2199) || n === 1001) return 'Tiền Giang';
+      if ((n >= 2201 && n <= 2299) || n === 1002) return 'Bến Tre';
+      if ((n >= 2301 && n <= 2399) || n === 1003) return 'Đồng Tháp';
+      if ((n >= 2401 && n <= 2499) || n === 1004) return 'Vĩnh Long';
+      if ((n >= 2501 && n <= 2599) || n === 1005) return 'Trà Vinh';
+      if ((n >= 2601 && n <= 2699) || n === 1006) return 'Hậu Giang';
+      if ((n >= 2701 && n <= 2799) || n === 1007) return 'An Giang';
+      if ((n >= 2801 && n <= 2899) || n === 1008) return 'Sóc Trăng';
+      if ((n >= 2901 && n <= 2999) || n === 1009) return 'Kiên Giang';
+      return null;
+    };
+
+    function withProvinceMeta(items) {
+      return items.map(item => ({ ...item, province: provinceById(item.id) }));
+    }
+
+    function createChildWardsForOtherProvinces(items) {
+      const generated = [];
+      const provinceOnly = new Set([
+        'Cần Thơ', 'Tiền Giang', 'Bến Tre', 'Đồng Tháp', 'Vĩnh Long',
+        'Trà Vinh', 'Hậu Giang', 'An Giang', 'Sóc Trăng', 'Kiên Giang'
+      ]);
+      const districtRows = items.filter(item => {
+        const p = provinceById(item.id);
+        if (!p || !provinceOnly.has(p)) return false;
+        return item.id >= 2001 && item.id <= 2999;
+      });
+
+      districtRows.forEach((districtRow) => {
+        for (let i = 1; i <= 10; i++) {
+          const offsetLat = ((i - 5.5) * 0.008);
+          const offsetLon = (((i % 2 === 0) ? 1 : -1) * 0.01) + ((i - 5.5) * 0.004);
+          generated.push({
+            id: districtRow.id * 100 + i,
+            name: `Xã ${i} - ${districtRow.name}`,
+            district: districtRow.name,
+            lat: Number((districtRow.lat + offsetLat).toFixed(4)),
+            lon: Number((districtRow.lon + offsetLon).toFixed(4)),
+            province: districtRow.province || provinceById(districtRow.id)
+          });
+        }
+      });
+      return items.concat(generated);
+    }
+
+    const WARDS_DATA_WITH_PROVINCE = withProvinceMeta(WARDS_DATA);
+    const FINAL_WARDS_DATA = createChildWardsForOtherProvinces(WARDS_DATA_WITH_PROVINCE);
+
+    window.WARDS = FINAL_WARDS_DATA;
+    window.WARDS_COORDS = FINAL_WARDS_DATA;
     const DISTRICT_ORDER = [
       'fav', 'Cần Thơ', 'Tiền Giang', 'Bến Tre', 'Đồng Tháp', 'Vĩnh Long', 'Trà Vinh', 'Hậu Giang', 'An Giang', 'Sóc Trăng', 'Kiên Giang', 'Bạc Liêu', 'Cà Mau'
     ];
     const districtRank = new Map(DISTRICT_ORDER.map((d, i) => [d, i]));
 
-    let currentFilter = RT.favorites.length ? 'fav' : 'all';
+    let currentFilter = RT.favorites.length ? 'fav' : 'Cà Mau';
 
     const resetBtn = $('searchReset');
+    const PROVINCE_TABS = new Set([
+      'Cần Thơ', 'Tiền Giang', 'Bến Tre', 'Đồng Tháp', 'Vĩnh Long',
+      'Trà Vinh', 'Hậu Giang', 'An Giang', 'Sóc Trăng', 'Kiên Giang',
+      'Bạc Liêu', 'Cà Mau'
+    ]);
+    const PROVINCE_RULES = {
+      'Cà Mau': { ranges: [[1, 32], [1011, 1011]] },
+      'Bạc Liêu': { ranges: [[33, 87], [1010, 1010]] },
+      'Cần Thơ': { ranges: [[2001, 2099], [1012, 1012]] },
+      'Tiền Giang': { ranges: [[2101, 2199], [1001, 1001]] },
+      'Bến Tre': { ranges: [[2201, 2299], [1002, 1002]] },
+      'Đồng Tháp': { ranges: [[2301, 2399], [1003, 1003]] },
+      'Vĩnh Long': { ranges: [[2401, 2499], [1004, 1004]] },
+      'Trà Vinh': { ranges: [[2501, 2599], [1005, 1005]] },
+      'Hậu Giang': { ranges: [[2601, 2699], [1006, 1006]] },
+      'An Giang': { ranges: [[2701, 2799], [1007, 1007]] },
+      'Sóc Trăng': { ranges: [[2801, 2899], [1008, 1008]] },
+      'Kiên Giang': { ranges: [[2901, 2999], [1009, 1009]] }
+    };
 
-    function getItemHTML(w, isFav, isSearchEmpty, idx) {
+    function resolveProvinceFromWard(ward) {
+      if (!ward) return null;
+      if (ward.province && PROVINCE_TABS.has(ward.province)) return ward.province;
+      if (PROVINCE_TABS.has(ward.district)) return ward.district;
+      const id = Number(ward.id) || 0;
+      if (id >= 1 && id <= 32) return 'Cà Mau';
+      if (id >= 33 && id <= 87) return 'Bạc Liêu';
+      if (id >= 2001 && id <= 2099) return 'Cần Thơ';
+      if (id >= 2101 && id <= 2199) return 'Tiền Giang';
+      if (id >= 2201 && id <= 2299) return 'Bến Tre';
+      if (id >= 2301 && id <= 2399) return 'Đồng Tháp';
+      if (id >= 2401 && id <= 2499) return 'Vĩnh Long';
+      if (id >= 2501 && id <= 2599) return 'Trà Vinh';
+      if (id >= 2601 && id <= 2699) return 'Hậu Giang';
+      if (id >= 2701 && id <= 2799) return 'An Giang';
+      if (id >= 2801 && id <= 2899) return 'Sóc Trăng';
+      if (id >= 2901 && id <= 2999) return 'Kiên Giang';
+      return null;
+    }
+
+    function getFilterFromCurrentGPS() {
+      const nearest = nearestWard(RT.lat, RT.lon);
+      const province = resolveProvinceFromWard(nearest?.ward);
+      if (province && tabs.querySelector(`.chip[data-d="${province}"]`)) return province;
+      return 'Cà Mau';
+    }
+
+    function wardBelongsToFilter(ward, filter) {
+      if (!filter) return true;
+      const id = Number(ward.id) || 0;
+      const rule = PROVINCE_RULES[filter];
+      if (!rule) return ward.district === filter;
+      const inRange = rule.ranges.some(([min, max]) => id >= min && id <= max);
+      return ward.province === filter || ward.district === filter || inRange;
+    }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function escapeRegExp(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function highlightMatch(text, query) {
+      const safeText = escapeHTML(text);
+      const q = (query || '').trim();
+      if (!q) return safeText;
+      try {
+        const regex = new RegExp(`(${escapeRegExp(q)})`, 'ig');
+        return safeText.replace(regex, '<mark class="search-mark">$1</mark>');
+      } catch {
+        return safeText;
+      }
+    }
+
+    function getSelectedWardId() {
+      if (!FINAL_WARDS_DATA.length) return null;
+      const byName = FINAL_WARDS_DATA.find(w => w.name === RT.name);
+      if (byName) return byName.id;
+      if (!Number.isFinite(RT.lat) || !Number.isFinite(RT.lon)) return null;
+      let min = Infinity;
+      let bestId = null;
+      for (const w of FINAL_WARDS_DATA) {
+        const d2 = (w.lat - RT.lat) ** 2 + (w.lon - RT.lon) ** 2;
+        if (d2 < min) {
+          min = d2;
+          bestId = w.id;
+        }
+      }
+      return min < 0.0008 ? bestId : null;
+    }
+
+    function getItemHTML(w, isFav, idx, query, isSelected) {
+      const nameHTML = highlightMatch(w.name, query);
+      const districtHTML = highlightMatch(w.district, query);
       return `
-      <div class="sr-item" data-id="${w.id}" style="animation-delay: ${idx * 0.03}s">
+      <div class="sr-item ${isSelected ? 'is-selected' : ''}" data-id="${w.id}" style="animation-delay: ${idx * 0.03}s">
         <div class="sr-icon">📍</div>
         <div class="sr-body">
-          <div class="sr-name">${w.name}</div>
-          <div class="sr-dist">${w.district}</div>
+          <div class="sr-name">${nameHTML}</div>
+          <div class="sr-dist">${districtHTML}</div>
         </div>
+        ${isSelected ? '<span class="sr-selected-pill">Đang chọn</span>' : ''}
         <div class="sr-weather">
-          <div class="sr-temp">${w.lat.toFixed(2)}°N</div>
-          <div class="sr-rain">${w.lon.toFixed(2)}°E</div>
+          <div class="sr-coords">${w.lat.toFixed(2)}°N · ${w.lon.toFixed(2)}°E</div>
         </div>
         <button type="button" class="sr-fav-btn ${isFav ? 'active' : ''}" data-id="${w.id}" title="Yêu thích">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
@@ -2719,15 +2925,15 @@
     }
 
     function renderResults(filter, query) {
-      let items = WARDS_DATA;
+      let items = FINAL_WARDS_DATA;
       const isSearchEmpty = !query || query.trim() === '';
 
       if (resetBtn) resetBtn.classList.toggle('visible', !isSearchEmpty);
 
       if (filter === 'fav') {
         items = items.filter(w => RT.favorites.includes(w.id));
-      } else if (filter && filter !== 'all') {
-        items = items.filter(w => w.district === filter);
+      } else if (filter) {
+        items = items.filter(w => wardBelongsToFilter(w, filter));
       }
 
       if (!isSearchEmpty) {
@@ -2736,13 +2942,17 @@
           w.name.toLowerCase().includes(q) || w.district.toLowerCase().includes(q));
       }
 
-      if (!(isSearchEmpty && filter === 'all')) {
-        items = items.slice().sort((a, b) => {
-          const ra = districtRank.get(a.district) ?? 999;
-          const rb = districtRank.get(b.district) ?? 999;
-          return ra !== rb ? ra - rb : a.name.localeCompare(b.name, 'vi');
-        });
-      }
+      items = items.slice().sort((a, b) => {
+        if (!isSearchEmpty) {
+          const q = query.toLowerCase();
+          const aStarts = a.name.toLowerCase().startsWith(q);
+          const bStarts = b.name.toLowerCase().startsWith(q);
+          if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        }
+        const ra = districtRank.get(a.district) ?? 999;
+        const rb = districtRank.get(b.district) ?? 999;
+        return ra !== rb ? ra - rb : a.name.localeCompare(b.name, 'vi');
+      });
 
       if (!items.length) {
         results.innerHTML = `
@@ -2753,7 +2963,35 @@
         return;
       }
 
-      results.innerHTML = items.map((w, i) => getItemHTML(w, RT.favorites.includes(w.id), isSearchEmpty, i)).join('');
+      const selectedWardId = getSelectedWardId();
+      const grouped = items.reduce((acc, item) => {
+        (acc[item.district] ||= []).push(item);
+        return acc;
+      }, {});
+      const groupEntries = Object.entries(grouped).sort((a, b) => {
+        const ra = districtRank.get(a[0]) ?? 999;
+        const rb = districtRank.get(b[0]) ?? 999;
+        return ra !== rb ? ra - rb : a[0].localeCompare(b[0], 'vi');
+      });
+
+      results.innerHTML = groupEntries.map(([district, wards], groupIdx) => {
+        const districtHTML = highlightMatch(district, query);
+        const itemsHTML = wards
+          .map((w, idx) => getItemHTML(
+            w,
+            RT.favorites.includes(w.id),
+            groupIdx * 0.04 + idx * 0.02,
+            query,
+            selectedWardId === w.id
+          ))
+          .join('');
+        return `
+          <section class="sr-group">
+            <div class="sr-group-title">${districtHTML} <span class="sr-group-count">${wards.length}</span></div>
+            <div class="sr-group-list">${itemsHTML}</div>
+          </section>
+        `;
+      }).join('');
     }
 
     results.addEventListener('click', (e) => {
@@ -2767,7 +3005,7 @@
 
       const item = e.target.closest('.sr-item');
       if (item) {
-        const ward = WARDS_DATA.find(w => w.id === parseInt(item.dataset.id));
+        const ward = FINAL_WARDS_DATA.find(w => w.id === parseInt(item.dataset.id));
         if (ward) {
           setLocation(ward.lat, ward.lon, ward.name);
           overlay.classList.remove('open');
@@ -2780,9 +3018,10 @@
     searchBtn.addEventListener('click', () => {
       overlay.classList.add('open');
       setTimeout(() => input.focus(), 100);
-      currentFilter = RT.favorites.length ? 'fav' : 'all';
+      currentFilter = getFilterFromCurrentGPS();
       tabs.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.d === currentFilter));
       renderResults(currentFilter, input.value);
+      results.scrollTop = 0;
     });
 
     const handleSearch = debounce(() => renderResults(currentFilter, input.value), 180);
@@ -2794,8 +3033,12 @@
       renderResults(currentFilter, '');
     });
 
-    closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
-    overlay.addEventListener('click', (e) => e.target === overlay && overlay.classList.remove('open'));
+    const closeOverlay = () => {
+      overlay.classList.remove('open');
+      results.scrollTop = 0;
+    };
+    closeBtn.addEventListener('click', closeOverlay);
+    overlay.addEventListener('click', (e) => e.target === overlay && closeOverlay());
 
     tabs.addEventListener('click', (e) => {
       const btn = e.target.closest('.chip');
@@ -2806,7 +3049,16 @@
       renderResults(currentFilter, input.value);
     });
 
-    renderResults('all', '');
+    tabs.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const maxScrollLeft = tabs.scrollWidth - tabs.clientWidth;
+      if (maxScrollLeft <= 0) return;
+      e.preventDefault();
+      const next = tabs.scrollLeft + e.deltaY;
+      tabs.scrollLeft = Math.max(0, Math.min(maxScrollLeft, next));
+    }, { passive: false });
+
+    renderResults(currentFilter, '');
   }
 
   function initSMSModal() {
@@ -2913,6 +3165,463 @@
     renderCompCard(compData.baclieu, 'compBodyOld', 'var(--warm)');
   }
 
+  function generateHydroDataFallback() {
+    const sinusoidal = (avg, amp, phase) => avg + amp * Math.sin((Date.now() / 60000) * 0.1 + phase);
+    const tide = Math.sin((Date.now() / 3600000) * 1.5);
+    return [
+      {
+        id: 'H802', name: 'C.Nàng Âm', type: 'Trạm Mặn', province: 'Vĩnh Long',
+        lat: 10.085799314571, lon: 106.22567474842,
+        salinity: sinusoidal(0.9, 0.9, 3.3457472104553667).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 2.3502493256051813).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.9, 0.9, 3.3457472104553667) > 1.62 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H730', name: 'TP. Tân An', type: 'Trạm Mặn', province: 'Long An',
+        lat: 10.541196139791, lon: 106.41570389271,
+        salinity: sinusoidal(7.5, 7.5, 3.529918648961598).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.8904277339829045).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(7.5, 7.5, 3.529918648961598) > 13.5 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H842', name: 'Cái Côn', type: 'Trạm Mặn', province: 'Sóc Trăng',
+        lat: 9.9326677009353, lon: 105.89412689209,
+        salinity: sinusoidal(0.05, 0.05, 0.931945766956112).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 1.774327176358069).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.05, 0.05, 0.931945766956112) > 0.09000000000000001 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H919', name: 'C. Vàm Giồng', type: 'Trạm Mặn', province: 'Tiền Giang',
+        lat: 10.298684598568, lon: 106.54768466949,
+        salinity: sinusoidal(1.9, 1.9, 4.59899211565992).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 6.258819095393949).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.9, 1.9, 4.59899211565992) > 3.42 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H901', name: 'Phà Tân Phú', type: 'Trạm Mặn', province: 'Bến Tre',
+        lat: 10.270488302337, lon: 106.14956974983,
+        salinity: sinusoidal(0.1, 0.1, 0.7038926179226006).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.402217387053884).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.1, 0.1, 0.7038926179226006) > 0.18000000000000002 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H794', name: 'TP. Bến Tre', type: 'Trạm Mặn', province: 'Bến Tre',
+        lat: 10.22666346192, lon: 106.34500622749,
+        salinity: sinusoidal(1.95, 1.95, 2.8139705467634966).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.509951049334508).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.95, 1.95, 2.8139705467634966) > 3.51 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H808', name: ' TT. Bến Lức', type: 'Trạm Mặn', province: 'Long An',
+        lat: 10.638338932535, lon: 106.47540450096,
+        salinity: sinusoidal(7.5, 7.5, 1.1285003256999662).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.1515109401395).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(7.5, 7.5, 1.1285003256999662) > 13.5 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H904', name: 'TT. Trà Ôn', type: 'Trạm Mặn', province: 'Vĩnh Long',
+        lat: 9.9642117274145, lon: 105.91864228249,
+        salinity: sinusoidal(0.05, 0.05, 6.086998050211482).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.23617715785505325).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.05, 0.05, 6.086998050211482) > 0.09000000000000001 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H774', name: 'Ngã 3 Nước Trong', type: 'Trạm Mặn', province: 'Kiên Giang',
+        lat: 9.688853231, lon: 105.3353025,
+        salinity: sinusoidal(7.5, 7.5, 5.379422420109272).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.035212996599320395).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(7.5, 7.5, 5.379422420109272) > 13.5 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H903', name: 'Măng Thít', type: 'Trạm Mặn', province: 'Vĩnh Long',
+        lat: 10.160708937301, lon: 106.16807699203,
+        salinity: sinusoidal(1.8, 1.8, 2.4486734190153707).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.625545807449394).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.8, 1.8, 2.4486734190153707) > 3.24 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H855', name: 'Vàm Đường Đức', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 9.844687685145, lon: 106.02270126343,
+        salinity: sinusoidal(0.15000000000000002, 0.05, 5.963395905360428).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 2.495760485357934).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.15000000000000002, 0.05, 5.963395905360428) > 0.18000000000000002 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H740', name: 'C.Xuân Hòa', type: 'Trạm Mặn', province: 'Tiền Giang',
+        lat: 10.336156117083, lon: 106.40842437744,
+        salinity: sinusoidal(0.65, 0.65, 2.2038840287238917).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.893887594902805).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.65, 0.65, 2.2038840287238917) > 1.1700000000000002 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H902', name: 'Đại Ngãi', type: 'Trạm Mặn', province: 'Sóc Trăng',
+        lat: 9.7322370274588, lon: 106.07566952705,
+        salinity: sinusoidal(5.7, 2.2, 0.525613956437781).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.4510317230402023).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(5.7, 2.2, 0.525613956437781) > 7.11 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H913', name: 'Vị Thanh', type: 'Trạm Mực nước', province: 'Hậu Giang',
+        lat: 9.7754625052547, lon: 105.45739352703,
+        salinity: sinusoidal(0.434, 0.010000000000000009, 1.3919841103799946).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 1.6264605958418068).toFixed(2),
+        flowRate: Math.round(sinusoidal(154, 30, 0.9275166173618141)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.434, 0.010000000000000009, 1.3919841103799946) > 0.3996 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H870', name: 'Hòa Định', type: 'Trạm Mặn', province: 'Tiền Giang',
+        lat: 10.314518178785, lon: 106.44606113434,
+        salinity: sinusoidal(0.8, 0.8, 3.1736545019558053).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.864237526069695).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.8, 0.8, 3.1736545019558053) > 1.4400000000000002 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H905', name: 'Châu Đốc', type: 'Trạm Mực nước', province: 'An Giang',
+        lat: 10.705233348599, lon: 105.13347655535,
+        salinity: sinusoidal(0.577, 0.363, 3.5842253103901744).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.20476967025704357).toFixed(2),
+        flowRate: Math.round(sinusoidal(67, 30, 0.7579701196972859)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.577, 0.363, 3.5842253103901744) > 0.846 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H772', name: 'Cầu Cái Tư', type: 'Trạm Mặn', province: 'Hậu Giang',
+        lat: 9.74328712624, lon: 105.39330482483,
+        salinity: sinusoidal(0.285, 0.135, 4.166831269852131).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 1.5045964108786498).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.285, 0.135, 4.166831269852131) > 0.378 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H848', name: 'C. Cần Chông', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 9.7584447285916, lon: 106.11389905214,
+        salinity: sinusoidal(0.0, 0.0, 4.840703112504572).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.498778011410919).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.0, 0.0, 4.840703112504572) > 0.0 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H907', name: 'Vàm Nao', type: 'Trạm Mực nước', province: 'An Giang',
+        lat: 10.578424885229, lon: 105.3633928299,
+        salinity: sinusoidal(0.842, 0.22099999999999997, 3.805455711314537).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.9449994849457057).toFixed(2),
+        flowRate: Math.round(sinusoidal(192, 30, 0.7666159367406028)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.842, 0.22099999999999997, 3.805455711314537) > 0.9567 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H915', name: 'Long Định', type: 'Trạm Mực nước', province: 'Tiền Giang',
+        lat: 10.399644296598, lon: 106.25660598278,
+        salinity: sinusoidal(0.65, 0.0, 5.158928696573467).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.223105536628201).toFixed(2),
+        flowRate: Math.round(sinusoidal(115, 30, 0.7919487366741483)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.65, 0.0, 5.158928696573467) > 0.5850000000000001 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H911', name: 'Mỹ Hóa', type: 'Trạm Mực nước', province: 'Bến Tre',
+        lat: 10.22145417451, lon: 106.34955659509,
+        salinity: sinusoidal(0.9625, 0.2025, 4.430012427204073).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.792236545317782).toFixed(2),
+        flowRate: Math.round(sinusoidal(200, 30, 0.7116093526943044)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.9625, 0.2025, 4.430012427204073) > 1.0485 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H773', name: 'Cống Cái Lớn', type: 'Trạm Mặn', province: 'Kiên Giang',
+        lat: 9.8394022167081, lon: 105.12735843658,
+        salinity: sinusoidal(17.69, 0.9800000000000004, 1.1790700538895704).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 1.06866464707458).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(17.69, 0.9800000000000004, 1.1790700538895704) > 16.803 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H850', name: 'Bắc Trang', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 9.7170234876055, lon: 106.14991239832,
+        salinity: sinusoidal(0.0, 0.0, 6.200150250664761).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 1.0996289206478465).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.0, 0.0, 6.200150250664761) > 0.0 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H804', name: 'C.Láng Thé', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 10.01344362319, lon: 106.3138949,
+        salinity: sinusoidal(1.545, 1.545, 1.5757385342938766).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.9046448594240356).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.545, 1.545, 1.5757385342938766) > 2.781 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H849', name: 'Kênh 3/2', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 9.805610220402, lon: 106.28274947405,
+        salinity: sinusoidal(0.09, 0.09, 0.06561059361116504).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.261598800914343).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.09, 0.09, 0.06561059361116504) > 0.162 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H768', name: 'TT. Gò Quao ', type: 'Trạm Mặn', province: 'Kiên Giang',
+        lat: 9.7230582942842, lon: 105.27867794037,
+        salinity: sinusoidal(7.57, 0.5899999999999999, 3.70496084400799).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 6.038650396696577).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(7.57, 0.5899999999999999, 3.70496084400799) > 7.344 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H851', name: 'TP. Trà Vinh', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 9.9758544847029, lon: 106.3546105437,
+        salinity: sinusoidal(1.87, 1.87, 2.83184610292617).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.12702391661963483).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.87, 1.87, 2.83184610292617) > 3.366 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H906', name: 'Tân Châu', type: 'Trạm Mực nước', province: 'An Giang',
+        lat: 10.800621746925, lon: 105.24794518948,
+        salinity: sinusoidal(0.5435, 0.3065, 2.4316261554051155).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.486815141741514).toFixed(2),
+        flowRate: Math.round(sinusoidal(129, 30, 0.2717028242422188)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.5435, 0.3065, 2.4316261554051155) > 0.765 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H864', name: 'Bắc Hồng Dân', type: 'Trạm Mặn', province: 'Bạc Liêu',
+        lat: 9.5915676121792, lon: 105.41832447052,
+        salinity: sinusoidal(3.83, 0.14000000000000012, 4.0818473640758235).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.9907709376565841).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(3.83, 0.14000000000000012, 4.0818473640758235) > 3.5730000000000004 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H866', name: 'Cống Cái Bé', type: 'Trạm Mặn', province: 'Kiên Giang',
+        lat: 9.8496559483294, lon: 105.1436662674,
+        salinity: sinusoidal(5.985, 2.8150000000000004, 1.403156902866574).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.7102005997741018).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(5.985, 2.8150000000000004, 1.403156902866574) > 7.920000000000001 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H862', name: 'Làng T7-Xẻo Cạn', type: 'Trạm Mặn', province: 'Kiên Giang',
+        lat: 9.6751936800787, lon: 105.11939764023,
+        salinity: sinusoidal(6.699999999999999, 0.31000000000000005, 3.2903282131112785).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 2.10606882645502).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(6.699999999999999, 0.31000000000000005, 3.2903282131112785) > 6.309 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H914', name: 'Phụng Hiệp', type: 'Trạm Mực nước', province: 'Hậu Giang',
+        lat: 9.8119032037405, lon: 105.82343190908,
+        salinity: sinusoidal(1.051, 0.05199999999999999, 0.7060032654890053).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.2964632946642322).toFixed(2),
+        flowRate: Math.round(sinusoidal(168, 30, 0.43697204630248454)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.051, 0.05199999999999999, 0.7060032654890053) > 0.9927 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H803', name: 'C.Cái Hóp', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 10.063114389702, lon: 106.25537753105,
+        salinity: sinusoidal(0.815, 0.815, 3.3215277806531955).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.495999220280633).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.815, 0.815, 3.3215277806531955) > 1.4669999999999999 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H908', name: 'Mỹ Thuận', type: 'Trạm Mực nước', province: 'Vĩnh Long',
+        lat: 10.275331255948, lon: 105.9263985604,
+        salinity: sinusoidal(1.1365, 0.03849999999999998, 0.16307187637021678).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.7555498453552096).toFixed(2),
+        flowRate: Math.round(sinusoidal(145, 30, 0.1905193446074127)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.1365, 0.03849999999999998, 0.16307187637021678) > 1.0575 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H912', name: 'Vàm Kênh', type: 'Trạm Mực nước', province: 'Tiền Giang',
+        lat: 10.27295861383, lon: 106.73922121525,
+        salinity: sinusoidal(0.669, 0.07800000000000001, 3.1473823277268282).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.5912294456845646).toFixed(2),
+        flowRate: Math.round(sinusoidal(169, 30, 0.12110015556528209)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.669, 0.07800000000000001, 3.1473823277268282) > 0.6723 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H811', name: 'C. Bông Bót', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 9.8685558061445, lon: 106.00647926331,
+        salinity: sinusoidal(0.32, 0.32, 2.316841751767875).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.687599367856242).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.32, 0.32, 2.316841751767875) > 0.5760000000000001 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H910', name: 'Chợ Lách', type: 'Trạm Mực nước', province: 'Bến Tre',
+        lat: 10.2790815249, lon: 106.12463057041,
+        salinity: sinusoidal(1.1105, 0.17849999999999994, 2.2659580205963006).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.268921395841158).toFixed(2),
+        flowRate: Math.round(sinusoidal(120, 30, 0.7194040624922536)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.1105, 0.17849999999999994, 2.2659580205963006) > 1.1601 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H909', name: 'Cần Thơ', type: 'Trạm Mực nước', province: 'Cần Thơ',
+        lat: 10.052982243093, lon: 105.78708797693,
+        salinity: sinusoidal(1.1905000000000001, 0.057499999999999996, 3.0405879179088786).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.678058785710671).toFixed(2),
+        flowRate: Math.round(sinusoidal(70, 30, 0.8404167356411927)),
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.1905000000000001, 0.057499999999999996, 3.0405879179088786) > 1.1232 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H795', name: 'C. Tân Dinh', type: 'Trạm Mặn', province: 'Trà Vinh',
+        lat: 9.9032555722376, lon: 105.98954916,
+        salinity: sinusoidal(0.0, 0.0, 4.440272469636886).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 2.920082153381337).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.0, 0.0, 4.440272469636886) > 0.0 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H871', name: 'TP. Mỹ Tho', type: 'Trạm Mặn', province: 'Tiền Giang',
+        lat: 10.352045858947, lon: 106.36638343334,
+        salinity: sinusoidal(0.0, 0.0, 0.6068688902207199).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 2.531229928833472).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.0, 0.0, 0.6068688902207199) > 0.0 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H878', name: 'Cái Trâm', type: 'Trạm Mặn', province: 'Sóc Trăng',
+        lat: 9.8756905377025, lon: 105.94747066498,
+        salinity: sinusoidal(0.345, 0.014999999999999986, 4.851392628498097).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 6.198490525875019).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.345, 0.014999999999999986, 4.851392628498097) > 0.324 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H859', name: 'Tiểu Dừa', type: 'Trạm Mặn', province: 'Cà Mau',
+        lat: 9.4105577527268, lon: 104.96743440628,
+        salinity: sinusoidal(33.085, 0.9849999999999994, 2.104747882975096).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.592038739925854).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(33.085, 0.9849999999999994, 2.104747882975096) > 30.663 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H920', name: 'Kim Sơn', type: 'Trạm Mặn', province: 'Tiền Giang',
+        lat: 10.324260712812, lon: 106.24561965466,
+        salinity: sinusoidal(0.0, 0.0, 2.9198039813457544).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.2389546755013177).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.0, 0.0, 2.9198039813457544) > 0.0 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H893', name: 'Trí Phải', type: 'Trạm Mặn', province: 'Cà Mau',
+        lat: 9.4278258479391, lon: 105.1715773344,
+        salinity: sinusoidal(0.43, 0.0, 0.5344431723907336).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 5.376502226802911).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.43, 0.0, 0.5344431723907336) > 0.387 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H863', name: 'Ngã 3 Đình', type: 'Trạm Mặn', province: 'Bạc Liêu',
+        lat: 9.6354035409649, lon: 105.2921640873,
+        salinity: sinusoidal(13.155000000000001, 0.4449999999999994, 0.4130965918391226).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 2.1151561292562806).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(13.155000000000001, 0.4449999999999994, 0.4130965918391226) > 12.24 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H880', name: 'Xẻo Chít', type: 'Trạm Mặn', province: 'Sóc Trăng',
+        lat: 9.5864050925958, lon: 105.54627656937,
+        salinity: sinusoidal(0.055, 0.0049999999999999975, 3.218452224067511).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.5469648950970267).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.055, 0.0049999999999999975, 3.218452224067511) > 0.054 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H861', name: 'Vĩnh Thuận', type: 'Trạm Mặn', province: 'Kiên Giang',
+        lat: 9.5087727191643, lon: 105.25618493557,
+        salinity: sinusoidal(10.79, 0.20000000000000018, 1.0504649104784938).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 0.7255642797139444).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(10.79, 0.20000000000000018, 1.0504649104784938) > 9.891 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H881', name: 'Dù Tho', type: 'Trạm Mặn', province: 'Sóc Trăng',
+        lat: 9.5045771583164, lon: 105.96536636353,
+        salinity: sinusoidal(0.94, 0.0, 1.6032821693618713).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.704976213025362).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.94, 0.0, 1.6032821693618713) > 0.846 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H892', name: 'Khánh Thuận', type: 'Trạm Mặn', province: 'Cà Mau',
+        lat: 9.460174077425, lon: 105.04521846771,
+        salinity: sinusoidal(0.9, 0.030000000000000027, 0.9110095399635673).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 4.1343470552605).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(0.9, 0.030000000000000027, 0.9110095399635673) > 0.8370000000000001 ? 'alert' : 'normal'
+      },
+      {
+        id: 'H890', name: 'Biện Nhị', type: 'Trạm Mặn', province: 'Cà Mau',
+        lat: 9.3551754941463, lon: 104.84941720963,
+        salinity: sinusoidal(1.73, 0.0, 1.5702065656340427).toFixed(1),
+        waterLevel: sinusoidal(1.1, 0.9, 3.563734149579333).toFixed(2),
+        flowRate: 'N/A',
+        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
+        status: sinusoidal(1.73, 0.0, 1.5702065656340427) > 1.557 ? 'alert' : 'normal'
+      }
+    ];
+  }
+
   function renderComparisonChart() {
     const canvas = $('comparisonChart');
     if (!canvas) return;
@@ -3001,68 +3710,127 @@
     ctx.fillText('Bạc Liêu (cũ)', 146, 10);
   }
 
-  function sinusoidal(base, amp, phase) {
-    return base + amp * Math.sin(Date.now() / 3600000 + phase);
+  const HYDRO_REALTIME_ENDPOINT = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://thuyloidbscl.com/bando/dulieu/diem-quan-trac');
+  const HYDRO_CACHE_TTL_MS = 10 * 60 * 1000;
+  const HYDRO_DBSCL_BOUNDS = { latMin: 8.3, latMax: 11.3, lonMin: 104.3, lonMax: 107.5 };
+  let hydroStationsCache = [];
+  let hydroStationsFetchedAt = 0;
+
+
+  function parseHydroValue(text) {
+    if (text == null) return null;
+    const m = String(text).replace(',', '.').match(/-?\d+(?:\.\d+)?/);
+    return m ? Number(m[0]) : null;
+  }
+
+
+  function getProvinceFromAddress(address = '') {
+    const addr = String(address || '');
+    const provinces = [
+      'Long An', 'Tiền Giang', 'Bến Tre', 'Trà Vinh', 'Vĩnh Long', 'Đồng Tháp',
+      'An Giang', 'Kiên Giang', 'Hậu Giang', 'Sóc Trăng', 'Bạc Liêu', 'Cà Mau', 'Cần Thơ'
+    ];
+    return provinces.find(p => addr.includes(p)) || null;
+  }
+
+  function normalizeHydroStations(rows = []) {
+    const stationMap = new Map();
+    rows.forEach((row) => {
+      const lat = Number(row?.lat);
+      const lon = Number(row?.long);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      if (lat < HYDRO_DBSCL_BOUNDS.latMin || lat > HYDRO_DBSCL_BOUNDS.latMax) return;
+      if (lon < HYDRO_DBSCL_BOUNDS.lonMin || lon > HYDRO_DBSCL_BOUNDS.lonMax) return;
+      const province = getProvinceFromAddress(row?.diachi);
+      if (!province) return;
+
+      const key = `${row.id}-${String(row.ten_tram || '').trim().toLowerCase()}`;
+      if (!stationMap.has(key)) {
+        stationMap.set(key, {
+          id: `R${row.id}`,
+          name: row.ten_tram || `Trạm ${row.id}`,
+          type: 'Thủy văn thực đo',
+          province,
+          lat,
+          lon,
+          salinity: null,
+          waterLevel: null,
+          flowRate: null,
+          tide: 'N/A',
+          status: 'normal',
+          updatedAt: row.thongtin_man || '',
+        });
+      }
+      const station = stationMap.get(key);
+      const value = parseHydroValue(row.thongtin_man) ?? parseHydroValue(row.man_max);
+      if (String(row.chuc_nang || '').toLowerCase().includes('man')) {
+        if (value != null) station.salinity = value;
+        station.type = 'Độ mặn thực đo';
+      } else {
+        if (value != null) station.waterLevel = value;
+        station.type = 'Mực nước thực đo';
+      }
+
+      const warnMax = parseHydroValue(row.mucdo_canhbao_max);
+      const warnMin = parseHydroValue(row.mucdo_canhbao_min);
+      if (value != null) {
+        if ((warnMax != null && value >= warnMax) || (warnMin != null && value <= warnMin)) {
+          station.status = 'alert';
+        } else if (warnMax != null || warnMin != null) {
+          station.status = station.status === 'alert' ? 'alert' : 'warning';
+        }
+      }
+    });
+
+    return Array.from(stationMap.values())
+      .map((s) => ({
+        ...s,
+        salinity: s.salinity != null ? s.salinity.toFixed(2) : 'N/A',
+        waterLevel: s.waterLevel != null ? s.waterLevel.toFixed(3) : 'N/A',
+        flowRate: 'N/A',
+      }))
+      .sort((a, b) => {
+        if (a.province !== b.province) return a.province.localeCompare(b.province, 'vi');
+        return a.name.localeCompare(b.name, 'vi');
+      });
+  }
+
+  async function refreshHydroStations(force = false) {
+    const now = Date.now();
+    if (!force && hydroStationsCache.length && (now - hydroStationsFetchedAt < HYDRO_CACHE_TTL_MS)) {
+      return hydroStationsCache;
+    }
+    try {
+      const res = await fetch(HYDRO_REALTIME_ENDPOINT, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Hydro API HTTP ${res.status}`);
+      const payload = await res.json();
+      const stations = normalizeHydroStations(payload?.data || []);
+      if (stations.length) {
+        hydroStationsCache = stations;
+        hydroStationsFetchedAt = now;
+      }
+    } catch (err) {
+      console.warn('[Hydro] fallback to local data:', err?.message || err);
+      if (!hydroStationsCache.length) {
+        hydroStationsCache = generateHydroDataFallback();
+        hydroStationsFetchedAt = now;
+      }
+    }
+    return hydroStationsCache;
   }
 
   function generateHydroData() {
-    const t = Date.now() / 1000;
-    const tide = Math.sin(t / (6.2 * 3600));
-    return [
-      {
-        id: 'S01', name: 'Trạm Sông Đốc', type: 'Thủy hải văn',
-        lat: 8.99, lon: 104.82,
-        salinity: sinusoidal(18.5, 3.5, 0).toFixed(1),
-        waterLevel: sinusoidal(1.85, 0.65, 0.5).toFixed(2),
-        flowRate: Math.round(sinusoidal(120, 40, 1.0)),
-        tide: tide > 0 ? 'Triều lên' : 'Triều rút',
-        status: sinusoidal(18.5, 3.5, 0) > 22 ? 'alert' : 'normal'
-      },
-      {
-        id: 'S02', name: 'Trạm Gành Hào', type: 'Triều cường & Mặn',
-        lat: 9.11, lon: 105.44,
-        salinity: sinusoidal(21.0, 4.0, 1.2).toFixed(1),
-        waterLevel: sinusoidal(2.10, 0.70, 1.7).toFixed(2),
-        flowRate: Math.round(sinusoidal(85, 30, 2.1)),
-        tide: Math.sin(t / (6.2 * 3600) + 0.8) > 0 ? 'Triều lên' : 'Triều rút',
-        status: sinusoidal(21.0, 4.0, 1.2) > 24 ? 'warning' : 'normal'
-      },
-      {
-        id: 'S03', name: 'Trạm Thới Bình', type: 'Nước ngọt & Phèn',
-        lat: 9.35, lon: 105.15,
-        salinity: sinusoidal(0.4, 0.3, 2.5).toFixed(1),
-        waterLevel: sinusoidal(0.75, 0.25, 2.8).toFixed(2),
-        flowRate: Math.round(sinusoidal(45, 15, 3.2)),
-        tide: 'N/A',
-        status: 'normal'
-      },
-      {
-        id: 'S04', name: 'Trạm Năm Căn', type: 'Thủy hải văn',
-        lat: 8.82, lon: 105.05,
-        salinity: sinusoidal(25.0, 5.0, 3.8).toFixed(1),
-        waterLevel: sinusoidal(1.60, 0.55, 4.1).toFixed(2),
-        flowRate: Math.round(sinusoidal(200, 60, 4.5)),
-        tide: Math.sin(t / (6.2 * 3600) + 2.1) > 0 ? 'Triều lên' : 'Triều rút',
-        status: 'normal'
-      },
-      {
-        id: 'S05', name: 'Trạm Cà Mau', type: 'Khí tượng thủy văn',
-        lat: 9.18, lon: 105.15,
-        salinity: sinusoidal(1.2, 0.5, 5.0).toFixed(1),
-        waterLevel: sinusoidal(0.90, 0.30, 5.3).toFixed(2),
-        flowRate: Math.round(sinusoidal(65, 20, 5.7)),
-        tide: 'N/A',
-        status: 'normal'
-      },
-    ];
+    return hydroStationsCache.length ? hydroStationsCache : generateHydroDataFallback();
   }
 
   function getNearestStationData() {
     const stations = generateHydroData();
     if (!stations.length) return null;
+    const usableStations = stations.filter(s => Number.isFinite(parseFloat(s.waterLevel)));
+    const source = usableStations.length ? usableStations : stations;
     let nearest = null;
     let minDist = Infinity;
-    stations.forEach(s => {
+    source.forEach(s => {
       const d = Math.sqrt(Math.pow(s.lat - RT.lat, 2) + Math.pow(s.lon - RT.lon, 2));
       if (d < minDist) {
         minDist = d;
@@ -3119,10 +3887,32 @@
   function renderHydroStations() {
     const grid = $('hydroGrid');
     if (!grid) return;
-    const stations = generateHydroData();
-    const now = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    let stations = generateHydroData();
+    
+    // Robustly detect province from RT.name (handling prefixes like TP., Tỉnh...)
+    const pList = ['Long An', 'Tiền Giang', 'Bến Tre', 'Trà Vinh', 'Vĩnh Long', 'Đồng Tháp', 'An Giang', 'Kiên Giang', 'Hậu Giang', 'Sóc Trăng', 'Bạc Liêu', 'Cà Mau', 'Cần Thơ'];
+    const currentProvince = pList.find(p => RT.name.toLowerCase().includes(p.toLowerCase())) || null;
+    
+    console.log('[Hydro] Filtering for province:', currentProvince, 'from location:', RT.name);
+    
+    // Filter stations by province
+    const filteredStations = currentProvince ? stations.filter(s => s.province === currentProvince) : [];
 
-    grid.innerHTML = stations.map(s => {
+    const showingAll = filteredStations.length === 0;
+    const stationsToShow = showingAll ? stations : filteredStations;
+
+    const now = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const subtitle = $('hydroSubtitle');
+    if (subtitle) {
+      const sourceLabel = hydroStationsCache.length ? 'Dữ liệu trực tuyến ĐBSCL' : 'Mạng lưới quan trắc vùng ĐBSCL';
+      const scopeLabel = showingAll ? 'Toàn vùng' : `Tại ${currentProvince}`;
+      subtitle.textContent = `${sourceLabel} · ${stationsToShow.length} trạm · ${scopeLabel} · Cập nhật ${now}`;
+    }
+
+
+
+    grid.innerHTML = stationsToShow.map(s => {
+
       const statusClass = `hydro-status--${s.status}`;
       const statusLabel = s.status === 'alert' ? 'Cảnh báo' : s.status === 'warning' ? 'Chú ý' : 'Bình thường';
       return `
@@ -3148,7 +3938,7 @@
               <span class="hydro-metric__lbl">Mực nước</span>
             </div>
             <div class="hydro-metric hydro-metric--flow">
-              <span class="hydro-metric__val">${s.flowRate} m³/s</span>
+              <span class="hydro-metric__val">${s.flowRate === 'N/A' ? 'N/A' : `${s.flowRate} m³/s`}</span>
               <span class="hydro-metric__lbl">Lưu lượng</span>
             </div>
             <div class="hydro-metric hydro-metric--tide">
@@ -3620,9 +4410,13 @@
     await initialRefresh;
 
     fetchComparison();
+    await refreshHydroStations(true);
     renderHydroStations();
 
-    setInterval(renderHydroStations, 30000);
+    setInterval(async () => {
+      await refreshHydroStations(true);
+      renderHydroStations();
+    }, 180000);
 
     setInterval(fetchComparison, 60000);
 
